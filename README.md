@@ -29,13 +29,30 @@ user corrections that flat recency loses, bellamem keeps.
 - A retroactive ratification pass (user "yes/agreed" boosts preceding assistant claims)
 - A structured context-pack builder (`expand` for generic queries, `expand_before_edit` for pre-edit context)
 - An empirical bench comparing structured retrieval against flat recency, LLM compact, and RAG
-- ~2500 lines of Python, zero required runtime dependencies
+- ~3100 lines of Python, zero required runtime dependencies
 
 **It is not:**
 - A replacement for Claude Code's context window (that's Anthropic's code; bellamem augments, doesn't replace)
 - A governance / drift-prevention tool (separate problem; out of scope)
 - A graph database, vector store, or LLM framework
 - A substitute for docs, tests, or good engineering practice
+
+## bellamem vs `/compact`
+
+Both compress a long session into something smaller. They do it differently and the difference is load-bearing:
+
+| | `/compact` | bellamem |
+|---|---|---|
+| **Output** | One narrative summary (~2000 tokens) | Queryable belief tree (~17k on disk, ~3k per query) |
+| **Shape** | Prose | Beliefs + typed edges (`→`, `⊥`, `⇒`) + mass + voices |
+| **Usage** | Replaces history; whole summary becomes new context | Load on demand per turn; `expand(focus, budget)` returns the slice you need |
+| **Preserves** | Broad topics, major decisions, conversational flow | Verbatim paraphrases, rejected approaches, cause-effect chains, self-observations, entity bridges |
+| **Loses** | Specific identifiers, ⊥ corrections ("WE DON'T NEED TWO URLS"), cause-effect structure | Tool outputs, file contents, conversational texture |
+| **Cross-session** | None — compacted context dies with the session | Full — tree persists on disk, next session inherits it |
+
+On our bench (13-item hand-labeled corpus), the compact-style contender (gpt-4o-mini summary) scored **8% LLM-judge rate**; bellamem's `expand` scored **92%** at a comparable budget. The structural weakness of narrative summaries is visible directly: they preserve themes but lose the specific decisions, corrections, and causes that an agent actually needs to act. See [BENCH.md](BENCH.md) for the full numbers.
+
+The two are complementary, not competing: `/compact` keeps the *feel* of the conversation going inside one session. bellamem keeps the *decisions* available across sessions.
 
 ---
 
@@ -94,6 +111,48 @@ bellamem bench
 ```
 
 Every command except `ingest-cc` and `reset` is read-only.
+
+### Starting a new session from an existing tree
+
+The belief tree lives at `~/.bellamem/default.json` (or wherever
+`BELLAMEM_SNAPSHOT` points). It survives Claude Code session
+boundaries, `/compact`, and process restarts.
+
+To pick up a new session from a prior one's memory:
+
+```bash
+# 1. Before closing the current session, update the tree
+bellamem ingest-cc
+
+# 2. Start the new Claude Code session (in a new context window)
+
+# 3. In the new session, load the pre-session state as the first action:
+bellamem expand "current state of <project> and open follow-ups" -t 2000
+
+# 4. For specific work, pre-load a targeted context:
+bellamem before-edit "the thing I'm about to work on" --entity <file>
+```
+
+**Confidence by question type** once you're in the new session:
+
+| Question | Tree answers it? | Source of truth |
+|---|---|---|
+| "What did we decide about X?" | yes (92% retrieval) | bellamem tree |
+| "Why did we reject approach Y?" | yes | ⊥ edges in tree |
+| "What are the causal chains we identified?" | yes | ⇒ edges in tree |
+| "What are my own anti-patterns?" | yes | `__self__` field |
+| "What's the current code in file X?" | **no** | `git` + file read |
+| "What's my commit state?" | **no** | `git log` |
+| "What did the grep output say?" | **no** | original transcript if kept |
+
+**bellamem restores knowledge, not environment.** For a complete
+memory at the start of a new session, combine bellamem (decisions,
+disputes, causes) with git (code state) and Claude Code's native
+tools (filesystem, environment). Any one of them alone is incomplete.
+
+When the MCP server lands (follow-up work), steps 3–4 become
+automatic: the agent calls `bellamem_expand` itself at session start
+without you pasting anything.
 
 ---
 

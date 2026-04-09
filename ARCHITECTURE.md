@@ -212,6 +212,84 @@ field if they all co-mentioned `auth.py` at some point.
 
 ---
 
+## Temporal / recency semantics
+
+bellamem records temporal data on every belief but uses it **selectively**.
+The short answer: **recency is a 10% tiebreaker for `expand()`; it is
+deliberately absent from `expand_before_edit()`; the turn-pair pass
+uses temporal ordering to detect reactions.**
+
+### What's stored
+
+Every `Belief` carries:
+
+- `event_time` — when the belief was first ingested
+- `last_touched` — when it was last accumulated on (by a new claim, a
+  user ratification, or a correction)
+
+Both are `time.time()` floats. Persisted in the snapshot; restored on load.
+
+### Where recency is used
+
+**1. `expand()` generic mode** includes a recency layer at 10% of the budget:
+
+```
+60 %  mass-ranked beliefs (tie-broken by focus relevance)
+30 %  focus-relevant beliefs
+10 %  recency tail (ranked by 1 / (now - last_touched))
+```
+
+For "what did we decide recently?" style queries, this surfaces the
+tail of recently-touched beliefs. Only 10% — mass and relevance dominate.
+Recency is a tiebreaker, not a primary signal.
+
+**2. The turn-pair retroactive ratification uses temporal ordering.**
+`adapters/claude_code.py:ingest_session` holds a `assistant_pending`
+list of the *immediately preceding* assistant turn's beliefs. When a
+user turn arrives, the reaction classifier decides affirm / correct /
+neutral, and the pending list is updated with `accumulate()` calls
+carrying `voice="user"`. The temporal window is "the last turn" — not
+a time-decay curve.
+
+**3. Same-voice attenuation in `Belief.accumulate()`** applies a 0.1
+factor to `lr` when the same voice repeats. This is mildly
+temporal-adjacent: a single source can't keep promoting its own claim
+by saying it again. But it's "same voice," not "same time."
+
+### Where recency is absent (and why)
+
+**`expand_before_edit()` has no recency layer.** By deliberate design:
+
+> Recency in before-edit mode biases toward the last bandaid. The
+> invariant that tells you not to repeat it is usually old, not recent.
+
+The 5-layer budget (40/20/20/10/10 across invariants/disputes/causes/
+bridges/self-model) leaves zero budget for recency. An edit is a moment
+of risk; loading the most recent activity is exactly the wrong prior.
+The oldest principle — the one you've been quietly violating — is
+more valuable than the newest patch.
+
+### What's intentionally NOT implemented
+
+- **No mass decay over time.** A decision ratified ten sessions ago has
+  the same mass as one ratified yesterday. Decisions are durable until
+  explicitly contradicted.
+- **No TTL on disputes.** A "don't do X" from months ago is still in
+  the tree blocking re-suggestion.
+- **No age-based pruning.** The tree grows monotonically until you
+  `bellamem reset`. At ~10k beliefs an archive policy will be needed;
+  not yet.
+
+This is the same design choice that sits behind the `/compact`
+comparison: **bellamem reweights by importance, not by age**. `/compact`
+preserves whatever is in the narrative summary it produces; bellamem
+preserves whatever has accumulated mass and structural significance.
+That choice is what makes the horizon compression work — recency-based
+compression can't reach the old invariants that bandaid-prone edits
+violate, because they're exactly the facts recency is trained to drop.
+
+---
+
 ## The 5-layer before-edit pack
 
 `core/expand.py:expand_before_edit` is the headline feature. Budget:

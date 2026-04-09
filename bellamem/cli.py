@@ -216,22 +216,26 @@ def cmd_bench(args: argparse.Namespace) -> int:
     # Use the most recent transcript for flat_tail/compact/rag
     transcript_path = transcripts[-1]
 
-    # Build OpenAI client if compact contender is requested
+    # Build OpenAI client if any LLM-using feature is active:
+    # the `compact` contender needs it, and so does --llm-judge.
     openai_client = None
     contenders = args.contenders.split(",") if args.contenders else None
-    needs_llm = contenders is None or "compact" in contenders
+    needs_llm = (
+        (contenders is None or "compact" in contenders)
+        or args.llm_judge
+    )
     if needs_llm:
         try:
             from openai import OpenAI  # type: ignore
         except ImportError:
-            print("compact contender requires openai package; "
-                  "install with `pip install -e '.[openai]'` or pass "
-                  "`--contenders flat_tail,rag_topk,expand,before_edit`",
+            print("this configuration requires the openai package; "
+                  "install with `pip install -e '.[openai]'` or drop "
+                  "--llm-judge and the compact contender",
                   file=sys.stderr)
             return 2
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            print("compact contender requires OPENAI_API_KEY in .env or env",
+            print("OpenAI features require OPENAI_API_KEY in .env or env",
                   file=sys.stderr)
             return 2
         openai_client = OpenAI(api_key=api_key)
