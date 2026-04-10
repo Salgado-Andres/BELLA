@@ -103,6 +103,92 @@ def _edge_type_for_rel(rel: str) -> str:
     return "support"  # REL_SUPPORT and any unknown relation
 
 
+# Compressed wall-clock: idle gaps larger than this (seconds) are
+# collapsed to _GAP_REPLACEMENT virtual seconds each. Keeps bursts
+# fast, skips days of dormancy between sessions. Gource-style.
+_GAP_THRESHOLD = 300.0   # 5 minutes
+_GAP_REPLACEMENT = 1.0   # virtual seconds for each compressed gap
+
+
+def _build_timeline(bella: "Bella", live_ids: set[str]) -> dict:
+    """Extract a compressed wall-clock timeline from the forest.
+
+    For each live belief, emits:
+      - one "birth" event at belief.event_time
+      - one "jump" event per entry in belief.jumps (Jaynes updates)
+
+    Global events are then sorted by real time, and long idle gaps
+    are collapsed so the viewer doesn't sit through days of dormancy
+    between active sessions while the forest was not being ingested.
+
+    Output shape (compact keys to keep payload small):
+      {
+        "duration": <virtual seconds to end of last event>,
+        "events": [
+          {"t": 0.0, "type": "birth", "id": "..."},
+          {"t": 0.2, "type": "jump", "id": "...", "d": 0.79, "v": "user"},
+          ...
+        ]
+      }
+
+    JUMPS_MAX caveat: if a very active belief has had its oldest
+    jumps dropped, the JS side reconstructs the initial log_odds as
+    (current_log_odds - sum(kept_deltas)), so the belief appears at
+    birth with the correct starting height instead of at 0.5. This
+    means early history looks "jumpy" (one big initial step then the
+    retained jumps) — accurate within what the data supports.
+    """
+    raw: list[dict] = []
+    for fname, g in bella.fields.items():
+        for bid, b in g.beliefs.items():
+            if bid not in live_ids:
+                continue
+            raw.append({
+                "real_t": float(b.event_time),
+                "type": "birth",
+                "id": bid,
+            })
+            for (ts, delta, voice) in (b.jumps or []):
+                raw.append({
+                    "real_t": float(ts),
+                    "type": "jump",
+                    "id": bid,
+                    "d": float(delta),
+                    "v": voice or "",
+                })
+
+    raw.sort(key=lambda e: e["real_t"])
+
+    if not raw:
+        return {"duration": 0.0, "events": []}
+
+    events: list[dict] = []
+    virtual_t = 0.0
+    prev_real = raw[0]["real_t"]
+    for ev in raw:
+        gap = ev["real_t"] - prev_real
+        if gap > _GAP_THRESHOLD:
+            virtual_t += _GAP_REPLACEMENT
+        else:
+            virtual_t += max(gap, 0.0)
+        out_ev: dict = {
+            "t": round(virtual_t, 3),
+            "type": ev["type"],
+            "id": ev["id"],
+        }
+        if ev["type"] == "jump":
+            out_ev["d"] = round(ev["d"], 4)
+            if ev.get("v"):
+                out_ev["v"] = ev["v"]
+        events.append(out_ev)
+        prev_real = ev["real_t"]
+
+    return {
+        "duration": events[-1]["t"] if events else 0.0,
+        "events": events,
+    }
+
+
 def build_payload(bella: "Bella") -> dict:
     """Build the JSON payload the Three.js viz consumes.
 
@@ -163,6 +249,15 @@ def build_payload(bella: "Bella") -> dict:
             "z": float(b.mass),
         })
 
+    # Timeline: compressed wall-clock event stream. The replay UI
+    # consumes this to animate the forest's formation.
+    timeline = _build_timeline(bella, live_ids)
+    # Map belief id → virtual birth time, so edges can hide themselves
+    # before their child belief has been born during replay.
+    birth_virtual: dict[str, float] = {
+        ev["id"]: ev["t"] for ev in timeline["events"] if ev["type"] == "birth"
+    }
+
     # Edges. Every non-root belief has exactly one (parent, rel) edge.
     # We emit it only if both endpoints are in live_ids — keeps the
     # payload consistent when a snapshot has dangling parents (legacy
@@ -171,10 +266,13 @@ def build_payload(bella: "Bella") -> dict:
     for fname, g in bella.fields.items():
         for bid, b in g.beliefs.items():
             if b.parent and b.parent in live_ids and bid in live_ids:
+                # Edge appears the moment the child belief is born —
+                # the child carries the (parent, rel) relationship.
                 edges_payload.append({
                     "type": _edge_type_for_rel(b.rel),
                     "from": b.parent,
                     "to": bid,
+                    "birth_t": float(birth_virtual.get(bid, 0.0)),
                 })
 
     return {
@@ -185,6 +283,7 @@ def build_payload(bella: "Bella") -> dict:
         "fields": fields_meta,
         "beliefs": beliefs_payload,
         "edges": edges_payload,
+        "timeline": timeline,
     }
 
 

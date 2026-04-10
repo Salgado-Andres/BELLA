@@ -18,6 +18,13 @@
   #tooltip .field-tag { color: #8ab4ff; font-weight: 600; }
   #tooltip .mass { color: #ffd43b; }
   #tooltip .voices { color: #94d82d; }
+  #playbar { position: fixed; left: 10px; right: 10px; bottom: 10px; padding: 8px 12px; background: rgba(10, 10, 20, 0.85); border: 1px solid #2a2a44; border-radius: 4px; display: flex; align-items: center; gap: 12px; font-size: 11px; z-index: 5; }
+  #playbtn { background: #4c9aff; color: #fff; border: none; padding: 6px 14px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 11px; min-width: 96px; }
+  #playbtn:hover { background: #6bafff; }
+  #playbtn.live { background: #2a2a44; color: #8a8ab0; }
+  #scrub { flex: 1; accent-color: #4c9aff; }
+  #timelabel { color: #c0c0e0; min-width: 120px; font-variant-numeric: tabular-nums; text-align: right; }
+  #speedlabel { color: #8a8ab0; }
   canvas { display: block; }
 </style>
 </head>
@@ -29,6 +36,11 @@
 </div>
 <div id="legend"><h2>fields</h2></div>
 <div id="tooltip"></div>
+<div id="playbar">
+  <button id="playbtn" class="live">▶ replay</button>
+  <input type="range" id="scrub" min="0" max="1000" value="1000" step="1">
+  <span id="timelabel">live · now</span>
+</div>
 
 <script id="graph-data" type="application/json">{{DATA_JSON}}</script>
 
@@ -127,24 +139,218 @@ for (const b of data.beliefs) {
 //   support: muted gray-blue, low opacity
 //   cause:   cyan-blue, medium opacity
 //   counter: red, higher opacity (disputes are the interesting thing)
+// edgeLines keeps (edge, line) pairs so replay can toggle visibility
+// and refresh geometry as endpoint Y positions change over time.
 const edgeStyle = {
   support: { color: 0x444466, opacity: 0.35 },
   cause:   { color: 0x55aaff, opacity: 0.70 },
   counter: { color: 0xff5577, opacity: 0.80 },
 };
+const edgeLines = [];
 for (const e of data.edges) {
   const a = beliefById.get(e.from);
   const b = beliefById.get(e.to);
   if (!a || !b) continue;
   const style = edgeStyle[e.type] || edgeStyle.support;
-  const geom = new THREE.BufferGeometry().setFromPoints([a.position, b.position]);
+  // Preallocate a 2-point buffer geometry we mutate in updateFrame
+  // during replay — cheaper than recreating geometry per frame.
+  const pos = new Float32Array([
+    a.position.x, a.position.y, a.position.z,
+    b.position.x, b.position.y, b.position.z,
+  ]);
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const mat = new THREE.LineBasicMaterial({
     color: style.color,
     transparent: true,
     opacity: style.opacity,
   });
-  scene.add(new THREE.Line(geom, mat));
+  const line = new THREE.Line(geom, mat);
+  scene.add(line);
+  edgeLines.push({ edge: e, line, meshA: a, meshB: b });
 }
+
+// ----- replay: per-belief log-odds trajectories -----
+// Compressed wall-clock timeline is shipped in data.timeline. We
+// reconstruct each belief's log_odds path so getMassAtTime(b, t)
+// can interpolate on the fly without mutating shared state.
+//
+//   current_log_odds = logit(b.mass)
+//   initial_log_odds = current_log_odds - sum(kept_deltas)
+//
+// Beliefs whose earliest jumps were dropped by JUMPS_MAX start at
+// a nonzero initial value — that keeps replay honest instead of
+// pretending unretained history was zero-mass.
+const LOG_ODDS_CLAMP = 6.0;  // ±6 ≈ mass ∈ [0.0025, 0.9975]
+function logit(m) {
+  const clamped = Math.max(1e-4, Math.min(1 - 1e-4, m));
+  return Math.log(clamped / (1 - clamped));
+}
+function sigmoid(x) {
+  if (x >= LOG_ODDS_CLAMP) return 1 / (1 + Math.exp(-LOG_ODDS_CLAMP));
+  if (x <= -LOG_ODDS_CLAMP) return 1 / (1 + Math.exp(LOG_ODDS_CLAMP));
+  return 1 / (1 + Math.exp(-x));
+}
+
+const timeline = data.timeline || { duration: 0, events: [] };
+const duration = timeline.duration;
+
+// Bucket events by belief id in a single pass.
+const eventsByBelief = new Map();
+for (const ev of timeline.events) {
+  let arr = eventsByBelief.get(ev.id);
+  if (!arr) { arr = []; eventsByBelief.set(ev.id, arr); }
+  arr.push(ev);
+}
+
+// Per-belief trajectory: array of { t, log_odds } waypoints.
+// Plus birth_t for the "when does this sphere exist?" check.
+for (const b of data.beliefs) {
+  const evs = eventsByBelief.get(b.id) || [];
+  const current_lo = logit(b.mass);
+  let sum_delta = 0;
+  for (const e of evs) if (e.type === 'jump') sum_delta += e.d;
+  const initial = current_lo - sum_delta;
+  const traj = [];
+  let cur = initial;
+  let birth_t = 0;
+  for (const e of evs) {
+    if (e.type === 'birth') {
+      birth_t = e.t;
+      traj.push({ t: e.t, lo: initial });
+    } else if (e.type === 'jump') {
+      cur += e.d;
+      traj.push({ t: e.t, lo: cur });
+    }
+  }
+  // Edge case: no birth event (shouldn't happen but be defensive)
+  if (traj.length === 0) {
+    traj.push({ t: 0, lo: current_lo });
+  }
+  b._traj = traj;
+  b._birth_t = birth_t;
+}
+
+function massAtTime(b, t) {
+  if (t < b._birth_t) return null;
+  const traj = b._traj;
+  // Binary search: largest index with t_w <= t
+  let lo = 0, hi = traj.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (traj[mid].t <= t) lo = mid; else hi = mid - 1;
+  }
+  return sigmoid(traj[lo].lo);
+}
+
+// ----- replay mode + controls -----
+let mode = 'live';          // 'live' | 'replay'
+let playing = false;
+let cursor = duration;      // virtual time position
+let lastFrameMs = performance.now();
+
+const playbtn = document.getElementById('playbtn');
+const scrub = document.getElementById('scrub');
+const timelabel = document.getElementById('timelabel');
+
+function fmtTime(t) {
+  if (t >= duration - 0.01) return 'end';
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t - m * 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')} / ${Math.floor(duration / 60).toString().padStart(2, '0')}:${Math.floor(duration % 60).toString().padStart(2, '0')}`;
+}
+
+function enterReplay() {
+  if (mode === 'replay') return;
+  mode = 'replay';
+  playbtn.classList.remove('live');
+}
+
+function enterLive() {
+  mode = 'live';
+  playing = false;
+  playbtn.textContent = '▶ replay';
+  playbtn.classList.add('live');
+  timelabel.textContent = 'live · now';
+  // Restore static snapshot state.
+  for (const b of data.beliefs) {
+    const mesh = beliefById.get(b.id);
+    if (!mesh) continue;
+    mesh.visible = true;
+    mesh.position.y = b.z * HEIGHT_SCALE;
+    mesh.material.opacity = 0.45 + 0.55 * b.mass;
+  }
+  for (const { line, meshA, meshB } of edgeLines) {
+    line.visible = true;
+    const pa = line.geometry.attributes.position.array;
+    pa[0] = meshA.position.x; pa[1] = meshA.position.y; pa[2] = meshA.position.z;
+    pa[3] = meshB.position.x; pa[4] = meshB.position.y; pa[5] = meshB.position.z;
+    line.geometry.attributes.position.needsUpdate = true;
+  }
+}
+
+function updateFrame(t) {
+  // Beliefs: visibility by birth time, Y by interpolated mass
+  for (const b of data.beliefs) {
+    const mesh = beliefById.get(b.id);
+    if (!mesh) continue;
+    const m = massAtTime(b, t);
+    if (m === null) {
+      mesh.visible = false;
+    } else {
+      mesh.visible = true;
+      mesh.position.y = m * HEIGHT_SCALE;
+      mesh.material.opacity = 0.45 + 0.55 * m;
+    }
+  }
+  // Edges: visibility by birth time, geometry refresh for any with
+  // both endpoints visible (their Y values just changed).
+  for (const { edge, line, meshA, meshB } of edgeLines) {
+    if (t < edge.birth_t || !meshA.visible || !meshB.visible) {
+      line.visible = false;
+      continue;
+    }
+    line.visible = true;
+    const pa = line.geometry.attributes.position.array;
+    pa[0] = meshA.position.x; pa[1] = meshA.position.y; pa[2] = meshA.position.z;
+    pa[3] = meshB.position.x; pa[4] = meshB.position.y; pa[5] = meshB.position.z;
+    line.geometry.attributes.position.needsUpdate = true;
+  }
+  timelabel.textContent = fmtTime(t);
+}
+
+playbtn.addEventListener('click', () => {
+  if (duration <= 0) return;
+  if (mode === 'live') {
+    enterReplay();
+    cursor = 0;
+    updateFrame(cursor);
+    scrub.value = 0;
+  }
+  if (!playing) {
+    if (cursor >= duration - 0.01) { cursor = 0; scrub.value = 0; }
+    playing = true;
+    playbtn.textContent = '❚❚ pause';
+  } else {
+    playing = false;
+    playbtn.textContent = '▶ resume';
+  }
+});
+
+scrub.addEventListener('input', () => {
+  if (duration <= 0) return;
+  enterReplay();
+  playing = false;
+  playbtn.textContent = '▶ resume';
+  cursor = (parseFloat(scrub.value) / 1000) * duration;
+  updateFrame(cursor);
+});
+
+// Double-click scrubber → return to live.
+scrub.addEventListener('dblclick', () => {
+  enterLive();
+  scrub.value = 1000;
+});
 
 // ----- hover inspection -----
 const raycaster = new THREE.Raycaster();
@@ -186,12 +392,31 @@ addEventListener('resize', () => {
 });
 
 // ----- loop -----
-function animate() {
+// Target replay duration: ~60 real seconds for the full history.
+// Tweakable via keyboard later if needed.
+const TARGET_REPLAY_SECONDS = 60;
+
+function animate(now) {
   requestAnimationFrame(animate);
+  const dt = Math.min((now - lastFrameMs) / 1000, 0.1);
+  lastFrameMs = now;
+
+  if (mode === 'replay' && playing && duration > 0) {
+    const speed = duration / TARGET_REPLAY_SECONDS;
+    cursor += dt * speed;
+    if (cursor >= duration) {
+      cursor = duration;
+      playing = false;
+      playbtn.textContent = '▶ replay again';
+    }
+    scrub.value = Math.round((cursor / duration) * 1000);
+    updateFrame(cursor);
+  }
+
   controls.update();
   renderer.render(scene, camera);
 }
-animate();
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
