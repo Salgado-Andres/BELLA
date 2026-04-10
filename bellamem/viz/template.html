@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bellamem — {{BELIEFS}} beliefs</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a14; color: #e6e6f0; font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #hud { position: fixed; top: 10px; left: 10px; padding: 8px 10px; background: rgba(10, 10, 20, 0.7); border: 1px solid #2a2a44; border-radius: 4px; font-size: 11px; line-height: 1.5; max-width: 320px; }
+  #hud h1 { margin: 0 0 6px 0; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+  #hud .hint { color: #8a8ab0; margin-top: 6px; }
+  #legend { position: fixed; top: 10px; right: 10px; padding: 8px 10px; background: rgba(10, 10, 20, 0.7); border: 1px solid #2a2a44; border-radius: 4px; font-size: 11px; max-height: 80vh; overflow-y: auto; }
+  #legend .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+  #legend .field { margin: 2px 0; }
+  #legend .count { color: #8a8ab0; margin-left: 4px; }
+  #legend h2 { margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #c0c0e0; }
+  #tooltip { position: fixed; padding: 6px 10px; background: rgba(8, 8, 16, 0.95); border: 1px solid #4a4a6a; border-radius: 4px; font-size: 11px; line-height: 1.5; pointer-events: none; display: none; max-width: 360px; z-index: 10; }
+  #tooltip .field-tag { color: #8ab4ff; font-weight: 600; }
+  #tooltip .mass { color: #ffd43b; }
+  #tooltip .voices { color: #94d82d; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <h1>bellamem {{BELLAMEM_VERSION}}</h1>
+  <div>{{BELIEFS}} beliefs · {{FIELDS}} fields</div>
+  <div class="hint">drag: rotate · right-drag: pan · wheel: zoom · hover: inspect</div>
+</div>
+<div id="legend"><h2>fields</h2></div>
+<div id="tooltip"></div>
+
+<script id="graph-data" type="application/json">{{DATA_JSON}}</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const data = JSON.parse(document.getElementById('graph-data').textContent);
+
+// ----- scene -----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a14);
+scene.fog = new THREE.Fog(0x0a0a14, 60, 140);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(0, 25, 55);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 5, 0);
+
+// ----- lighting -----
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.7);
+key.position.set(20, 40, 20);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x6688ff, 0.35);
+rim.position.set(-20, 10, -20);
+scene.add(rim);
+
+// ----- ground grid (mass=0 reference plane) -----
+const grid = new THREE.GridHelper(80, 40, 0x2a2a44, 0x14142a);
+grid.position.y = 0;
+scene.add(grid);
+
+// ----- field colors -----
+const fieldColor = new Map();
+for (const f of data.fields) {
+  fieldColor.set(f.name, new THREE.Color(f.color));
+}
+
+// ----- legend -----
+const legend = document.getElementById('legend');
+for (const f of data.fields) {
+  const row = document.createElement('div');
+  row.className = 'field';
+  row.innerHTML = `<span class="swatch" style="background:${f.color}"></span>${f.name}<span class="count">×${f.belief_count}</span>`;
+  legend.appendChild(row);
+}
+
+// ----- beliefs → spheres -----
+// Height scale: mass ranges 0..1, we lift by HEIGHT_SCALE so the
+// tallest peak is ~12 units above the grid. Ratified decisions
+// (mass ≥ 0.75) become clearly visible against the floor band.
+const HEIGHT_SCALE = 14;
+const sphereGeom = new THREE.SphereGeometry(0.35, 14, 10);
+
+const beliefById = new Map();
+const meshes = [];
+for (const b of data.beliefs) {
+  const color = fieldColor.get(b.field) || new THREE.Color(0x888899);
+  const mat = new THREE.MeshLambertMaterial({
+    color,
+    transparent: true,
+    opacity: 0.45 + 0.55 * b.mass,
+  });
+  const mesh = new THREE.Mesh(sphereGeom, mat);
+  mesh.position.set(b.pos[0], b.z * HEIGHT_SCALE, b.pos[1]);
+  // Radius scales with evidence count (log — otherwise a single
+  // ratified decision dominates).
+  const s = 0.7 + 0.35 * Math.log2(1 + b.voices);
+  mesh.scale.setScalar(s);
+  mesh.userData = b;
+  scene.add(mesh);
+  meshes.push(mesh);
+  beliefById.set(b.id, mesh);
+}
+
+// ----- edges → lines -----
+// Colors are deliberately distinct so dispute geometry pops out:
+//   support: muted gray-blue, low opacity
+//   cause:   cyan-blue, medium opacity
+//   counter: red, higher opacity (disputes are the interesting thing)
+const edgeStyle = {
+  support: { color: 0x444466, opacity: 0.35 },
+  cause:   { color: 0x55aaff, opacity: 0.70 },
+  counter: { color: 0xff5577, opacity: 0.80 },
+};
+for (const e of data.edges) {
+  const a = beliefById.get(e.from);
+  const b = beliefById.get(e.to);
+  if (!a || !b) continue;
+  const style = edgeStyle[e.type] || edgeStyle.support;
+  const geom = new THREE.BufferGeometry().setFromPoints([a.position, b.position]);
+  const mat = new THREE.LineBasicMaterial({
+    color: style.color,
+    transparent: true,
+    opacity: style.opacity,
+  });
+  scene.add(new THREE.Line(geom, mat));
+}
+
+// ----- hover inspection -----
+const raycaster = new THREE.Raycaster();
+raycaster.params.Line.threshold = 0.5;
+const ndc = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+
+addEventListener('pointermove', (ev) => {
+  ndc.x = (ev.clientX / innerWidth) * 2 - 1;
+  ndc.y = -(ev.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(meshes, false);
+  if (hits.length > 0) {
+    const b = hits[0].object.userData;
+    tooltip.innerHTML =
+      `<span class="field-tag">[${escapeHtml(b.field)}]</span> ` +
+      `<span class="mass">m=${b.mass.toFixed(2)}</span> ` +
+      `<span class="voices">v=${b.voices}</span><br>` +
+      escapeHtml(b.desc);
+    tooltip.style.left = (ev.clientX + 14) + 'px';
+    tooltip.style.top = (ev.clientY + 14) + 'px';
+    tooltip.style.display = 'block';
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ----- resize -----
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ----- loop -----
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
