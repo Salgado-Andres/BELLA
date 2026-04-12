@@ -323,17 +323,16 @@ structured retrieval preserves decisions. The two are complementary:
 
 ## See the graph
 
-A preview of the v0.1.1 3D viz rendering a real Bella belief
-hypergraph — roughly 1,800 beliefs from a month of Claude Code
-sessions on Bella itself, across eight topical fields. Drag to
-rotate; the replay bar scrubs history so you can watch the graph
-accumulate decision by decision.
+A real Bella belief hypergraph — roughly 1,800 beliefs from a month
+of Claude Code sessions on Bella itself, across eight topical fields.
+Typed edges (`→` support, `⊥` rejected approach, `⇒` cause) and
+mass-weighted nodes are the structure that flat context can't preserve.
 
 <a href="https://github.com/immartian/bellamem/raw/master/docs/bella-viz3d.webm">
-  <img src="docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph viz preview — click to play the .webm" width="720"/>
+  <img src="docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph visualization — click to play" width="720"/>
 </a>
 
-*Click the image above to play the .webm. (GitHub doesn't reliably embed `<video>` tags pointing at raw files, so the poster + link is the universal fallback.)*
+*Click the image to play the .webm.*
 
 ---
 
