@@ -39,6 +39,11 @@ new sessions, and new days. When tomorrow's session asks about the
 flaky test, it loads what yesterday decided, what yesterday rejected,
 and why.
 
+> Measured across **15 real Claude Code projects** on a developer's
+> machine, Bella compresses the conversation portion of the context
+> window by **median 17.6× (range 3.6×–90×)**. The biggest sample
+> (132k raw tokens) hit 90× — see [the production curve](docs/scenarios.md#chart-2--production-scale-log-x-budget-bounded).
+
 ---
 
 ## Before and after
@@ -366,6 +371,45 @@ algorithm changes.
 
 See [benchmarks/README.md](https://github.com/immartian/bellamem/blob/master/benchmarks/README.md) for the versioning
 convention and when to re-run.
+
+### Compression at scale — 15 real Claude Code projects
+
+The bench above answers *"is `expand` accurate?"* The next question
+is *"how many tokens does Bella actually save?"* For that, the
+[`docs/scenarios.md`](https://github.com/immartian/bellamem/blob/master/docs/scenarios.md)
+harness measures real Claude Code session transcripts sampled from
+**15 different projects** on a developer's machine — news monorepos,
+IRB documents, refactoring sessions, agent prototypes, marketing
+work — at a fixed `expand` budget of 1500 tokens.
+
+| | tokens |
+|---|---:|
+| raw conversation range | 274 → 132,399 |
+| compression ratio range | **3.6× → 90×** |
+| **median ratio** | **17.6×** |
+
+Visually:
+
+<p align="center">
+  <img src="docs/compression-curve-production.svg" alt="Production compression curve: 15 anonymised Claude Code sessions plotted on log-x axis from 100 to 200,000 raw conversation tokens. Each point's expand pack token count clusters near a budget ceiling of 1,500 regardless of how large the raw transcript got — so the compression ratio diverges with raw size. Synthetic small-scale scenarios appear as gray dots in the lower-left for context." width="720"/>
+</p>
+
+The pattern is unambiguous: **at production scale, the expand pack
+saturates at the budget ceiling, but the raw transcript is unbounded**.
+Doubling raw doesn't double expand; it doubles the ratio. The biggest
+sample (a multi-day news monorepo session at 132k conversation tokens)
+hit 90×.
+
+A second chart in the same doc shows the smaller-scale linear regime
+where `expand` grows with raw — that's where the synthetic break-even
+math gives the rule of thumb *"don't bother with Bella for
+conversations under ~200 tokens; the per-belief overhead dominates."*
+Above that, Bella pays off, and the longer the session, the more it
+saves.
+
+Sources are anonymised; only aggregate metrics are pinned. The
+measurement script lives in `docs/scenarios.py` for anyone who wants
+to reproduce on their own `~/.claude/projects/`.
 
 ---
 

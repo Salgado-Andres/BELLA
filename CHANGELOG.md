@@ -4,6 +4,112 @@ All notable changes will be documented in this file. This project aims
 for [Semantic Versioning](https://semver.org). Until v1.0, everything
 is subject to change.
 
+## [0.1.2] — Unreleased — second user-reported fix, classifier rot fixes, scenarios harness
+
+The second patch cycle. Ships another user-reported fix from
+@Salgado-Andres, two structural fixes to the ingest classifier
+that close known feedback loops, an audit-exit-semantics cleanup,
+the scenarios harness with empirical compression measurements,
+and a bunch of brand asset additions.
+
+### Fixed
+
+- **`.graph` saved to shell cwd instead of project directory when
+  cwd is not a git repo** (#4, reported by @Salgado-Andres). Same
+  reporter as #3, same precise diagnosis. On Windows, launching
+  Claude Code from `C:\Program Files\Claude Code` (not a git repo)
+  caused `paths.project_root()` to silently fall back to cwd —
+  bellamem then created `.graph/` inside the Claude Code install
+  directory, which also hit Windows permission issues. Fix adds a
+  new `BELLAMEM_PROJECT` env var as an explicit project anchor (the
+  reporter's exact suggestion), and makes the cwd fallback emit a
+  one-time stderr warning so silent fallback never happens again.
+- **Turn-pair ratification rot.** A user "ya" / "do it" / "sure"
+  was voice-crossing *every* claim extracted from the preceding
+  assistant turn, inflating the top-ratified-decisions list with
+  mid-discussion exposition instead of actual decisions. The
+  classifier now ratifies only the last-extracted claim — matching
+  the semantic of "user authorises the most recent offer", not
+  "user validates every content-marker sentence". Found via
+  dogfooding: the audit's own top decisions had become things like
+  *"Pros: ..."* and *"Cons: ..."* lists.
+- **Chat EW skips quoted graph output.** When the assistant quoted
+  audit/expand/surprises lines (`m=0.74 v=2 [field] ...`) into
+  conversation, those quoted lines were being re-extracted as new
+  claims and showing up in the next audit as fresh bandaid piles.
+  The graph was eating its own inspection reports — an ouroboros
+  feedback loop the graph had already ratified as a known rot. Fix
+  adds a `_GRAPH_OUTPUT_RE` filter that recognizes the unambiguous
+  `m=0.XX v=N` and `score=X.XX Δ=` fingerprints and short-circuits
+  classification on sentences containing them.
+
+### Changed
+
+- **`bellamem audit` exits 0 by default**, with a new `--strict`
+  flag for CI linter pipelines that want to fail the build on
+  entropy signals. Previously audit returned exit code 4 whenever
+  it found anything, which made `/bellamem audit` look like a
+  shell failure in Claude Code for any non-pristine graph. Audit
+  is a diagnostic, not a linter — finding signals is normal, not
+  an error. `--no-exit-code` is kept as a backwards-compat no-op.
+- **Finished the `BellaMem → Bella` rebrand** across the slash-command
+  template, source comments, and the three test files that still
+  asserted against the old name. Full test suite is now 121/121
+  green for the first time since the rebrand.
+
+### Added
+
+- **`docs/scenarios.py` — scenarios harness**, a multi-scenario
+  measurement framework that demonstrates Bella's compression with
+  reproducible numbers. Covers entropy reduction, structural
+  preservation, surfacing correctness, and token compression. Four
+  synthetic scenarios (rejected-refactor, flaky-test, long-debug,
+  sprint) at sizes from 80 to 1065 raw tokens, with structural
+  preservation and surfacing checks per scenario.
+- **`docs/scenarios.md` — generated report** that pins the headline
+  metrics: synthetic linear-fit break-even at **~214 raw tokens**,
+  production median compression ratio of **17.6×**, range
+  3.6×–90× across 15 sessions sampled from 15 different Claude
+  Code projects on a developer machine.
+- **`docs/compression-curve.svg`** — small-scale linear-regime chart
+  showing the synthetic scenarios + linear fit + break-even point.
+  Self-contained SVG, system-ui font (no Camo-proxy font loading
+  issues), 720×480 viewBox.
+- **`docs/compression-curve-production.svg`** — log-x production
+  chart showing 15 real-session data points, the budget ceiling at
+  1500, and the synthetic scenarios overlaid as gray markers in
+  the lower-left for context. The "expand is bounded, raw is not"
+  story made visual.
+- **README "Compression at scale" subsection** under Empirical
+  Results, surfacing the production curve and the median 17.6×
+  number that's now the strongest empirical claim in the repo.
+- **`tests/test_scenarios.py` — 7 regression assertions**: structure
+  preservation per scenario, surfacing correctness per scenario,
+  flaky-test entropy drop, long-debug positive token compression,
+  rejected-refactor dispute survival, sprint vs. long-debug
+  monotonic ratio growth, break-even point pinned under 300 tokens.
+- **`docs/brand/context-collapse.{svg,png}`** — the README hero
+  image refresh from earlier in the cycle: bigger LOSS/ENTROPY
+  typography, expanded viewBox, raster regenerated to match.
+- **`docs/brand/flat-vs-graph.svg` and `docs/brand/zimbo-to-agent.svg`**
+  finally tracked after drifting untracked across several sessions.
+
+### Housekeeping
+
+- Tests: 121 → 122 → 122 (added break-even pin, then merged into
+  the existing scenarios suite).
+- Master is 16+ commits ahead of v0.1.1 at release time.
+
+### Not in this release
+
+- Three.js 3D viz (deferred to v0.1.3+)
+- `bellamem ask` unified retrieval, autonomic lifecycle timer
+  (tracked in #2 — command surface reduction)
+- Graph-backed `/compact`, native edit-guard primitive (tracked in
+  #1 — blocked on upstream Claude Code hooks)
+
+---
+
 ## [0.1.1] — 2026-04-13 — Windows fix, AGPL transition, theory split
 
 First patch release. Ships the fix for the first community-reported
