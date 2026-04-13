@@ -122,7 +122,7 @@ what* — in far fewer tokens, and across the session boundaries where
 the left column can't go.
 
 <p align="center">
-  <img src="docs/brand/bella-architecture.svg" alt="Architecture: session history (flat chunks with thin shared bands) flows into the context window (a terminal); Bella extracts structure from the window into a belief hypergraph cube and feeds packs back." width="720"/>
+  <img src="docs/brand/context-collapse.svg" alt="The context rot is the real wall of Agentic AI. Left: six session-history chunks feed into a faded terminal via /compact and /clear, retaining 8% and 0% respectively across Claude Code, Codex, Cursor, Windsurf, OpenClaw. Right: the same chunks feed into a luminous belief-graph orb via bella save, which then restores a crisp terminal via bella resume, retaining 92%." width="960"/>
 </p>
 
 And the four items on the right are exactly the ones the agent would
@@ -372,8 +372,10 @@ convention and when to re-run.
 ## Limitations
 
 Bella lives alongside the agent, not inside it. That boundary is
-load-bearing and currently unmoved: we can't reach in and rewrite the
-context window directly. What we have today is advisory:
+load-bearing but not permanent — tracked as **[#1: Context lifecycle
+dependencies](https://github.com/immartian/bellamem/issues/1)**, blocked
+on upstream [anthropics/claude-code#47023](https://github.com/anthropics/claude-code/issues/47023)
+(exposing compact/session lifecycle hooks). Today what we have is advisory:
 
 - **No direct context-window control.** Bella can't swap active
   tokens, evict irrelevant context, or replace the window wholesale.
@@ -401,9 +403,12 @@ agent's context lifecycle we can observe and influence from outside.
 With deeper hooks — or a coding agent that exposed its context as a
 first-class API — a graph memory like Bella could drive the compaction
 cycle itself instead of being handed the leftovers. **We expect the
-upside of real context-window control to be substantial.** For now,
-the honest frame is: Bella is the memory layer; the agent is still
-the window manager.
+upside of real context-window control to be substantial.** These
+aren't permanent trade-offs — they're tracked in
+[#1](https://github.com/immartian/bellamem/issues/1), resolvable
+either upstream (via [claude-code#47023](https://github.com/anthropics/claude-code/issues/47023))
+or downstream (transcript-watcher fallback). For now, the honest frame
+is: Bella is the memory layer; the agent is still the window manager.
 
 ---
 
