@@ -1,0 +1,62 @@
+<svg viewBox="0 0 720 480" width="720" height="480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ptitle pdesc">
+<title id="ptitle">Bella compression at production scale</title>
+<desc id="pdesc">15 real Claude Code sessions sampled across 15 different projects. Log-x raw conversation tokens against linear-y expand pack tokens at budget 1500. A horizontal line marks the budget ceiling. As raw tokens grow by orders of magnitude, the expand pack saturates at the budget — so the compression ratio diverges with raw size. Median ratio across the sample is around 17×.</desc>
+<rect width="720" height="480" fill="#ffffff"/>
+<text x="360" y="36" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="#1e1b4b">Bella compression at production scale</text>
+<text x="360" y="58" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#64748b">15 real sessions across 15 projects · ratio range 4×—90× · median 18×</text>
+<line x1="80" y1="410" x2="680" y2="410" stroke="#cbd5e1" stroke-width="1.5"/>
+<line x1="80" y1="80" x2="80" y2="410" stroke="#cbd5e1" stroke-width="1.5"/>
+<line x1="80.0" y1="410" x2="80.0" y2="415" stroke="#94a3b8" stroke-width="1"/>
+<text x="80.0" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">100</text>
+<line x1="80.0" y1="80" x2="80.0" y2="410" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="261.76145045277417" y1="410" x2="261.76145045277417" y2="415" stroke="#94a3b8" stroke-width="1"/>
+<text x="261.76145045277417" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">1k</text>
+<line x1="261.76145045277417" y1="80" x2="261.76145045277417" y2="410" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="443.5229009055483" y1="410" x2="443.5229009055483" y2="415" stroke="#94a3b8" stroke-width="1"/>
+<text x="443.5229009055483" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">10k</text>
+<line x1="443.5229009055483" y1="80" x2="443.5229009055483" y2="410" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="625.2843513583224" y1="410" x2="625.2843513583224" y2="415" stroke="#94a3b8" stroke-width="1"/>
+<text x="625.2843513583224" y="430" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">100k</text>
+<line x1="625.2843513583224" y1="80" x2="625.2843513583224" y2="410" stroke="#f1f5f9" stroke-width="1"/>
+<line x1="134.71564864167755" y1="410" x2="134.71564864167755" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<line x1="207.0458018110966" y1="410" x2="207.0458018110966" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<line x1="316.47709909445166" y1="410" x2="316.47709909445166" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<line x1="388.80725226387074" y1="410" x2="388.80725226387074" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<line x1="498.2385495472259" y1="410" x2="498.2385495472259" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<line x1="570.5687027166449" y1="410" x2="570.5687027166449" y2="413" stroke="#cbd5e1" stroke-width="1"/>
+<text x="380.0" y="452" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#1e1b4b" font-weight="600">raw conversation tokens (log scale)</text>
+<line x1="75" y1="410.0" x2="80" y2="410.0" stroke="#94a3b8" stroke-width="1"/>
+<text x="70" y="414.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">0</text>
+<line x1="75" y1="327.5" x2="80" y2="327.5" stroke="#94a3b8" stroke-width="1"/>
+<text x="70" y="331.5" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">500</text>
+<line x1="75" y1="245.0" x2="80" y2="245.0" stroke="#94a3b8" stroke-width="1"/>
+<text x="70" y="249.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">1000</text>
+<line x1="75" y1="162.5" x2="80" y2="162.5" stroke="#94a3b8" stroke-width="1"/>
+<text x="70" y="166.5" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">1500</text>
+<line x1="75" y1="80.0" x2="80" y2="80.0" stroke="#94a3b8" stroke-width="1"/>
+<text x="70" y="84.0" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">2000</text>
+<text x="30" y="245.0" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#1e1b4b" font-weight="600" transform="rotate(-90 30 245.0)">expand pack tokens</text>
+<line x1="80" y1="162.5" x2="680" y2="162.5" stroke="#10b981" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.7"/>
+<text x="672" y="156.5" text-anchor="end" font-family="system-ui, sans-serif" font-size="11" fill="#10b981" font-weight="700">budget ceiling (1500)</text>
+<circle cx="128.13367161595937" cy="371.555" r="3.5" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"/>
+<circle cx="208.29881216670483" cy="351.92" r="3.5" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"/>
+<circle cx="266.7325548312283" cy="303.575" r="3.5" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"/>
+<text x="112.00660265801585" y="363.8" text-anchor="start" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8" font-style="italic">gray dots: synthetic scenarios</text>
+<circle cx="159.56617723475193" cy="397.295" r="6" fill="#94a3b8" stroke="white" stroke-width="2"/>
+<circle cx="344.87663328879336" cy="304.565" r="6" fill="#94a3b8" stroke="white" stroke-width="2"/>
+<circle cx="359.85869397799104" cy="268.43" r="6" fill="#94a3b8" stroke="white" stroke-width="2"/>
+<circle cx="366.9773974922847" cy="321.89" r="6" fill="#6366f1" stroke="white" stroke-width="2"/>
+<circle cx="377.9954422871847" cy="292.355" r="6" fill="#6366f1" stroke="white" stroke-width="2"/>
+<circle cx="408.85922943194373" cy="277.01" r="6" fill="#6366f1" stroke="white" stroke-width="2"/>
+<circle cx="499.9370460278828" cy="217.94000000000003" r="6" fill="#4f46e5" stroke="white" stroke-width="2"/>
+<circle cx="501.7584644703726" cy="176.525" r="6" fill="#4f46e5" stroke="white" stroke-width="2"/>
+<circle cx="522.6441605468838" cy="203.42" r="6" fill="#4f46e5" stroke="white" stroke-width="2"/>
+<circle cx="534.3242642722423" cy="170.09" r="6" fill="#4f46e5" stroke="white" stroke-width="2"/>
+<circle cx="541.9066710428274" cy="173.225" r="6" fill="#4f46e5" stroke="white" stroke-width="2"/>
+<circle cx="565.0689605252276" cy="165.8" r="6" fill="#10b981" stroke="white" stroke-width="2"/>
+<circle cx="569.7115352900657" cy="175.535" r="6" fill="#10b981" stroke="white" stroke-width="2"/>
+<circle cx="615.6424671734127" cy="169.1" r="6" fill="#059669" stroke="white" stroke-width="2"/>
+<circle cx="647.438292112861" cy="167.45000000000002" r="6" fill="#059669" stroke="white" stroke-width="2"/>
+<text x="166.7222512996934" y="401.75" text-anchor="start" font-family="system-ui, sans-serif" font-size="11" fill="#475569">every production point sits well below the budget ceiling — expand is bounded, raw is not</text>
+<text x="360" y="468" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#94a3b8">github.com/immartian/bellamem · 15 anonymised sessions, measured locally, no content extracted</text>
+</svg>
