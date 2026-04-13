@@ -239,7 +239,7 @@ class DiskCacheEmbedder:
         if not os.path.exists(self.path):
             return
         try:
-            with open(self.path) as f:
+            with open(self.path, encoding="utf-8") as f:
                 self._cache = json.load(f)
         except (OSError, json.JSONDecodeError):
             self._cache = {}
@@ -249,7 +249,7 @@ class DiskCacheEmbedder:
         os.makedirs(d, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".embedcache_", suffix=".json", dir=d)
         try:
-            with os.fdopen(fd, "w") as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self._cache, f)
             os.replace(tmp, self.path)
             self._dirty = 0
@@ -339,7 +339,7 @@ def load_dotenv(path: str = ".env") -> int:
     if not os.path.isfile(path):
         return 0
     loaded = 0
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for raw in f:
             line = raw.rstrip("\n")
             if not line.strip() or line.lstrip().startswith("#"):

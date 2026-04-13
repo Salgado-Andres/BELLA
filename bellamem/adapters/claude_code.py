@@ -227,7 +227,13 @@ def iter_turns(path: str, *, start_line: int = 0
     line_number is 1-indexed (matches `wc -l`); caller should persist
     the last seen line_number to the cursor.
     """
-    with open(path, "r") as f:
+    # encoding="utf-8" is explicit because Python's default is platform-
+    # dependent (cp1252 on Windows) and Claude Code writes its .jsonl
+    # transcripts as UTF-8. errors="replace" is defensive: undecodable
+    # bytes in prose content become "?" rather than crashing the ingest
+    # — the JSON structural characters are always ASCII-safe so parsing
+    # continues. Fixes #3.
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for i, raw in enumerate(f, start=1):
             if i <= start_line:
                 continue

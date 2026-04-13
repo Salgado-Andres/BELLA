@@ -82,7 +82,8 @@ def _read_transcript_turns(transcript_path: str) -> list[tuple[str, str]]:
     if not transcript_path or not os.path.exists(transcript_path):
         return []
     out: list[tuple[str, str]] = []
-    with open(transcript_path) as f:
+    # Matches adapters/claude_code.py:iter_turns encoding policy (#3).
+    with open(transcript_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             raw = line.strip()
             if not raw:

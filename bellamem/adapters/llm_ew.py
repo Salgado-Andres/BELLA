@@ -206,7 +206,7 @@ class LLMExtractor:
         if not os.path.exists(self._cache_path):
             return
         try:
-            with open(self._cache_path) as f:
+            with open(self._cache_path, encoding="utf-8") as f:
                 self._cache = json.load(f)
         except (OSError, json.JSONDecodeError):
             self._cache = {}
@@ -216,7 +216,7 @@ class LLMExtractor:
         os.makedirs(d, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".llmewcache_", suffix=".json", dir=d)
         try:
-            with os.fdopen(fd, "w") as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(self._cache, f)
             os.replace(tmp, self._cache_path)
             self._dirty = 0

@@ -213,7 +213,7 @@ def save(bella: "Bella", path: str) -> None:
     # missing or unreadable file doesn't block the save.
     try:
         if os.path.exists(path):
-            with open(path) as _f:
+            with open(path, encoding="utf-8") as _f:
                 _existing = json.load(_f)
             _existing_version = int(_existing.get("version", 0))
             if _existing_version < SNAPSHOT_VERSION:
@@ -286,7 +286,7 @@ def load_graph_only(path: str) -> "Bella":
     if not os.path.exists(path):
         return b
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         d = json.load(f)
 
     order = d.get("field_order") or list(d.get("fields", {}).keys())
@@ -320,7 +320,7 @@ def load(path: str) -> "Bella":
     if not os.path.exists(path):
         return b
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         d = json.load(f)
 
     # Embedder signature check — same as v2. Must match the current

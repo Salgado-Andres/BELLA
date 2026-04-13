@@ -1034,7 +1034,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         except ImportError:
             dot_path = os.path.splitext(out)[0] + ".dot"
             os.makedirs(os.path.dirname(os.path.abspath(dot_path)) or ".", exist_ok=True)
-            with open(dot_path, "w") as f:
+            with open(dot_path, "w", encoding="utf-8") as f:
                 f.write(dot_source)
             print(
                 f"graphviz Python package not installed — wrote DOT source to "
@@ -1063,7 +1063,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     # DOT fallback — write the source verbatim.
     out_dir = os.path.dirname(os.path.abspath(out)) or "."
     os.makedirs(out_dir, exist_ok=True)
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         f.write(dot_source)
     print(f"wrote DOT source ({n} nodes) → {out}")
     return 0
