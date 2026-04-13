@@ -334,7 +334,15 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 1
     report = audit(bella, top_n=args.top)
     print(render_report(report, max_per_section=args.max_per_section))
-    return 0 if report.is_clean() else (0 if args.no_exit_code else 4)
+    # Default: audit is a diagnostic, not a linter. A successful run
+    # returns 0 whether or not entropy signals were found — the
+    # findings are in stdout. --strict opts into the old
+    # linter-style exit-4-on-signals behavior for CI pipelines.
+    # --no-exit-code is a backwards-compat no-op (it always produced
+    # exit 0, which is now the default).
+    if report.is_clean() or not args.strict:
+        return 0
+    return 4
 
 
 def cmd_emerge(args: argparse.Namespace) -> int:
@@ -1351,8 +1359,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="rows per section (default 10)")
     sp.add_argument("--max-per-section", type=int, default=10,
                     help="max rows per section (default 10)")
+    sp.add_argument("--strict", action="store_true",
+                    help="exit non-zero (4) when entropy signals are "
+                         "found — for CI linter pipelines. Default is "
+                         "exit 0 (audit is a diagnostic, not a linter)")
     sp.add_argument("--no-exit-code", action="store_true",
-                    help="always exit 0 even if bandaid piles are found")
+                    help=argparse.SUPPRESS)  # backwards-compat no-op
     sp.set_defaults(func=cmd_audit)
 
     sp = sub.add_parser(
