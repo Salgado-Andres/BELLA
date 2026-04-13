@@ -1,14 +1,27 @@
 """Project-local path resolution for bellamem runtime state.
 
 Runtime state (belief snapshot + embedder cache + LLM EW cache) lives in
-`<project_root>/.graph/` by default, where `project_root` is the git repo
-root if we're inside one, otherwise the current working directory.
+`<project_root>/.graph/` by default, where `project_root` is resolved by:
+
+    1. $BELLAMEM_PROJECT if set — explicit anchor, the escape hatch for
+       non-git workflows and for Claude Code skills launched from a
+       non-repo cwd like `C:\\Program Files\\Claude Code`.
+    2. The git repo root, walking up from cwd.
+    3. Cwd itself, as a last-resort fallback. A one-time stderr warning
+       fires in this case so the fallback is visible — silent fallback
+       to cwd was the root cause of #4 (bellamem writing .graph/ into
+       the Claude Code install directory on Windows).
 
 Each path respects its corresponding environment variable override:
 
-    BELLAMEM_SNAPSHOT             → the belief graph snapshot
-    BELLAMEM_EMBEDDER_CACHE_PATH  → the on-disk embedding cache
-    BELLAMEM_EW_LLM_CACHE_PATH    → the LLM-backed EW cache
+    BELLAMEM_PROJECT              → project root anchor (directory)
+    BELLAMEM_SNAPSHOT             → the belief graph snapshot (file)
+    BELLAMEM_EMBEDDER_CACHE_PATH  → the on-disk embedding cache (file)
+    BELLAMEM_EW_LLM_CACHE_PATH    → the LLM-backed EW cache (file)
+
+Use BELLAMEM_PROJECT when you want one anchor that propagates to every
+path (snapshot, caches, .env loader, Claude Code session discovery).
+Use the per-file overrides when you want finer control.
 
 Legacy state: prior versions stored these under `~/.bellamem/`. v0.0.3 does
 NOT silently read from `~/.bellamem/` — that would re-introduce the
@@ -37,14 +50,43 @@ LEGACY_EMBED_CACHE = LEGACY_DIR / "embed_cache.json"
 LEGACY_LLM_EW_CACHE = LEGACY_DIR / "llm_ew_cache.json"
 
 _warned_legacy: set[str] = set()
+_warned_no_git = False
 
 
 def project_root() -> Path:
-    """Return the git repo root walking up from cwd, or cwd if not a repo."""
+    """Return the project anchor for bellamem runtime state.
+
+    Resolution order:
+      1. $BELLAMEM_PROJECT if set — explicit override.
+      2. Walk up from cwd looking for a .git directory.
+      3. Fall back to cwd, emitting a one-time stderr warning.
+
+    The last-resort cwd fallback preserves backwards compatibility,
+    but the warning makes the fallback visible so users with a non-repo
+    cwd (e.g. Claude Code skills launched from `C:\\Program Files\\Claude
+    Code` on Windows) don't silently accumulate .graph/ dirs in
+    unexpected places. Fixes #4.
+    """
+    override = os.environ.get("BELLAMEM_PROJECT")
+    if override:
+        return Path(os.path.expanduser(override)).resolve()
+
     start = Path.cwd().resolve()
     for parent in (start, *start.parents):
         if (parent / ".git").exists():
             return parent
+
+    global _warned_no_git
+    if not _warned_no_git:
+        _warned_no_git = True
+        print(
+            f"bellamem: no git repository found above {start} — "
+            f"falling back to cwd for runtime state (.graph/, .env, "
+            f"Claude Code session discovery). To pin bellamem to a "
+            f"specific project, set BELLAMEM_PROJECT=/path/to/project. "
+            f"See https://github.com/immartian/bellamem/issues/4.",
+            file=sys.stderr,
+        )
     return start
 
 
