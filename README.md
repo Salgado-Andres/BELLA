@@ -226,10 +226,15 @@ read-only.
 
 ---
 
-## Use with Claude Code
+## Use with <img src="docs/brand/claude-mark.svg" alt="Claude" width="22" align="center"/> Claude Code
 
 The flow that lets you keep working past the context window without
 losing the thread is packaged into four slash commands.
+
+> Bella is built for — and tested daily against — Claude Code. Other
+> coding agents (Codex, Cursor, Windsurf, OpenClaw) will need their
+> own adapter; see [#1](https://github.com/immartian/bellamem/issues/1)
+> for the lifecycle hooks we're tracking.
 
 ### Install the slash command — once, globally
 
