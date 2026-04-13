@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg viewBox="0 0 760 500" width="720" height="474"
+     role="img" aria-labelledby="title desc" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+  <title id="title">Same conversation, two mechanisms</title>
+  <desc id="desc">A single session at the top fans out through two mechanisms. On the left, /compact turns the conversation into a fuzzy prose blob where all the colored phrases (bandaid, rate-limiter, retry jitter) have collapsed into neutral gray narration. On the right, bella save lifts those same phrases out as colored nodes connected by causal arrows and a dispute edge — the structure is visibly preserved.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0,0 10,3.5 0,7" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0,0 10,3.5 0,7" fill="rgb(10,155,100)"/>
+    </marker>
+    <marker id="arrowIndigo" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0,0 10,3.5 0,7" fill="rgb(79,82,221)"/>
+    </marker>
+    <radialGradient id="nIndigo" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="rgb(147,150,255)"/>
+      <stop offset="100%" stop-color="rgb(79,82,221)"/>
+    </radialGradient>
+    <radialGradient id="nTeal" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="rgb(60,225,175)"/>
+      <stop offset="100%" stop-color="rgb(10,155,100)"/>
+    </radialGradient>
+    <radialGradient id="nAmber" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="rgb(255,200,90)"/>
+      <stop offset="100%" stop-color="rgb(210,130,5)"/>
+    </radialGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
+  </defs>
+
+  <!-- ============ Title ============ -->
+  <text x="380" y="26" text-anchor="middle"
+        font-family="'Space Grotesk', Inter, system-ui, sans-serif"
+        font-size="14" font-weight="600" fill="rgb(71,85,105)">Same conversation, two mechanisms</text>
+
+  <!-- ============ SHARED CONVERSATION (top center) ============ -->
+  <rect x="240" y="50" width="280" height="160" rx="6"
+        fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="252" y="68"
+        font-family="'Space Grotesk', sans-serif"
+        font-size="9" fill="#94a3b8" font-style="italic">session · fix-flaky-test</text>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace"
+     font-size="10" fill="#334155">
+    <text x="252" y="88"><tspan fill="#94a3b8">user</tspan>  test flaked again</text>
+    <text x="252" y="104"><tspan fill="#94a3b8">asst</tspan>  bumping timeout?</text>
+    <text x="252" y="120"><tspan fill="#94a3b8">user</tspan>  that's a <tspan fill="rgb(210,130,5)" font-weight="700">bandaid</tspan></text>
+    <text x="252" y="136"><tspan fill="#94a3b8">asst</tspan>  tracing retry.py</text>
+    <text x="252" y="152"><tspan fill="#94a3b8">asst</tspan>  <tspan fill="rgb(10,155,100)" font-weight="700">rate-limiter</tspan> hit</text>
+    <text x="252" y="168"><tspan fill="#94a3b8">user</tspan>  fix = <tspan fill="rgb(79,82,221)" font-weight="700">retry jitter</tspan></text>
+    <text x="252" y="184"><tspan fill="#94a3b8">asst</tspan>  patching ± 50ms</text>
+    <text x="252" y="200"><tspan fill="#94a3b8">user</tspan>  good</text>
+  </g>
+
+  <!-- little color legend under the session -->
+  <g font-family="'Space Grotesk', sans-serif" font-size="8" fill="#94a3b8">
+    <circle cx="260" cy="225" r="3" fill="url(#nAmber)"/>
+    <text x="268" y="228">bandaid</text>
+    <circle cx="318" cy="225" r="3" fill="url(#nTeal)"/>
+    <text x="326" y="228">rate-limiter</text>
+    <circle cx="396" cy="225" r="3" fill="url(#nIndigo)"/>
+    <text x="404" y="228">retry jitter</text>
+  </g>
+
+  <!-- ============ FORK ARROWS ============ -->
+  <path d="M 280 215 Q 200 250 155 288"
+        stroke="#94a3b8" stroke-width="1.5" fill="none"
+        marker-end="url(#arrow)"/>
+  <text x="195" y="248"
+        font-family="'JetBrains Mono', ui-monospace, monospace"
+        font-size="11" font-weight="700" fill="#64748b">/compact</text>
+
+  <path d="M 480 215 Q 560 250 605 288"
+        stroke="#94a3b8" stroke-width="1.5" fill="none"
+        marker-end="url(#arrow)"/>
+  <text x="567" y="248"
+        font-family="'JetBrains Mono', ui-monospace, monospace"
+        font-size="11" font-weight="700" fill="#64748b">bella save</text>
+
+  <!-- ============ LEFT RESULT: prose blob (fuzzy, colorless) ============ -->
+  <!-- irregular cloud shape -->
+  <path d="M 60 330
+           Q 30 315 45 290
+           Q 40 265 85 265
+           Q 105 245 150 260
+           Q 195 245 225 270
+           Q 270 265 280 295
+           Q 305 320 275 345
+           Q 280 385 230 385
+           Q 195 410 145 390
+           Q 90 405 65 375
+           Q 25 365 60 330 Z"
+        fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"
+        stroke-dasharray="3,3" filter="url(#blur)"/>
+
+  <g font-family="Georgia, 'Times New Roman', serif"
+     font-size="10" font-style="italic" fill="#94a3b8"
+     text-anchor="middle">
+    <text x="165" y="300">"a flaky test was discussed.</text>
+    <text x="165" y="316">assistant suggested bumping</text>
+    <text x="165" y="332">timeout, then patched retry.py</text>
+    <text x="165" y="348">with jitter for CI load."</text>
+  </g>
+
+  <!-- ghosts of the colored phrases — faint gray dots showing what was lost -->
+  <g opacity="0.55">
+    <circle cx="75" cy="380" r="3" fill="none" stroke="#cbd5e1" stroke-dasharray="1,1"/>
+    <circle cx="165" cy="388" r="3" fill="none" stroke="#cbd5e1" stroke-dasharray="1,1"/>
+    <circle cx="255" cy="378" r="3" fill="none" stroke="#cbd5e1" stroke-dasharray="1,1"/>
+  </g>
+
+  <!-- ============ RIGHT RESULT: belief graph (nodes + edges) ============ -->
+  <!-- light panel to contain the graph -->
+  <rect x="430" y="260" width="300" height="160" rx="6"
+        fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+
+  <!-- edges first so nodes sit on top -->
+  <!-- rate-limiter ⇒ flakes -->
+  <line x1="575" y1="300" x2="585" y2="370"
+        stroke="rgb(10,155,100)" stroke-width="1.6"
+        marker-end="url(#arrowTeal)"/>
+  <text x="583" y="340"
+        font-family="'JetBrains Mono', monospace" font-size="9"
+        fill="rgb(10,155,100)" font-weight="700">⇒</text>
+
+  <!-- retry jitter ⇒ fixes (flakes) -->
+  <line x1="672" y1="342" x2="600" y2="378"
+        stroke="rgb(79,82,221)" stroke-width="1.6"
+        marker-end="url(#arrowIndigo)"/>
+  <text x="632" y="352"
+        font-family="'JetBrains Mono', monospace" font-size="9"
+        fill="rgb(79,82,221)" font-weight="700">⇒ fixes</text>
+
+  <!-- bandaid ⊥ bumping timeout -->
+  <line x1="491" y1="310" x2="475" y2="365"
+        stroke="rgb(210,130,5)" stroke-width="1.6"
+        stroke-dasharray="5,3"/>
+  <circle cx="483" cy="338" r="7" fill="#fafafa" stroke="rgb(210,130,5)" stroke-width="1.2"/>
+  <text x="483" y="342" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="11"
+        fill="rgb(210,130,5)" font-weight="700">⊥</text>
+
+  <!-- primary nodes -->
+  <circle cx="490" cy="305" r="7" fill="url(#nAmber)"/>
+  <text x="490" y="290" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        font-weight="600" fill="#475569">bandaid</text>
+  <text x="490" y="278" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="8"
+        fill="#94a3b8">m=0.42</text>
+
+  <circle cx="578" cy="295" r="7" fill="url(#nTeal)"/>
+  <text x="578" y="280" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        font-weight="600" fill="#475569">rate-limiter</text>
+  <text x="578" y="268" text-anchor="middle"
+        font-family="'JetBrains Mono', monospace" font-size="8"
+        fill="#94a3b8">m=0.71</text>
+
+  <circle cx="680" cy="338" r="7" fill="url(#nIndigo)"/>
+  <text x="695" y="332" text-anchor="start"
+        font-family="'Space Grotesk', sans-serif" font-size="10"
+        font-weight="600" fill="#475569">retry jitter</text>
+  <text x="695" y="344" text-anchor="start"
+        font-family="'JetBrains Mono', monospace" font-size="8"
+        fill="#94a3b8">m=0.74</text>
+
+  <!-- auxiliary (small gray) nodes -->
+  <circle cx="593" cy="383" r="4" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="593" y="402" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif" font-size="9"
+        fill="#94a3b8">flakes</text>
+
+  <circle cx="468" cy="372" r="4" fill="#cbd5e1" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="458" y="390" text-anchor="end"
+        font-family="'Space Grotesk', sans-serif" font-size="9"
+        fill="#94a3b8">bumping timeout</text>
+
+  <!-- ============ Captions + metric bars ============ -->
+  <!-- LEFT: prose summary metrics -->
+  <text x="165" y="438" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif"
+        font-size="12" font-weight="600" fill="#64748b">prose summary</text>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace" font-size="9" fill="#94a3b8">
+    <text x="110" y="458">tokens</text>
+    <text x="220" y="458" text-anchor="end" fill="#64748b" font-weight="600">heavy · per-cycle</text>
+  </g>
+  <rect x="110" y="462" width="110" height="5" rx="1" fill="#e2e8f0"/>
+  <rect x="110" y="462" width="94" height="5" rx="1" fill="#94a3b8"/>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace" font-size="9" fill="#94a3b8">
+    <text x="110" y="482">entropy</text>
+    <text x="220" y="482" text-anchor="end" fill="#64748b" font-weight="600">high</text>
+  </g>
+  <rect x="110" y="486" width="110" height="5" rx="1" fill="#e2e8f0"/>
+  <rect x="110" y="486" width="101" height="5" rx="1" fill="#94a3b8"/>
+
+  <!-- RIGHT: belief graph metrics -->
+  <text x="580" y="438" text-anchor="middle"
+        font-family="'Space Grotesk', sans-serif"
+        font-size="12" font-weight="600" fill="#64748b">belief graph</text>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace" font-size="9" fill="#94a3b8">
+    <text x="525" y="458">tokens</text>
+    <text x="635" y="458" text-anchor="end" fill="rgb(10,155,100)" font-weight="600">light · on-demand</text>
+  </g>
+  <rect x="525" y="462" width="110" height="5" rx="1" fill="#e2e8f0"/>
+  <rect x="525" y="462" width="36" height="5" rx="1" fill="rgb(10,155,100)"/>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace" font-size="9" fill="#94a3b8">
+    <text x="525" y="482">entropy</text>
+    <text x="635" y="482" text-anchor="end" fill="rgb(10,155,100)" font-weight="600">low</text>
+  </g>
+  <rect x="525" y="486" width="110" height="5" rx="1" fill="#e2e8f0"/>
+  <rect x="525" y="486" width="20" height="5" rx="1" fill="rgb(10,155,100)"/>
+</svg>
