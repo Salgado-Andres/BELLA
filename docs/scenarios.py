@@ -537,6 +537,7 @@ class Scenario:
     test_question: str
     must_surface: list[str]          # substrings the expand pack must contain
     paraphrasings: list[str]          # 5 different ways to ask test_question
+    correct_answer_tags: list[str]    # tag names of ratified decision/cause turns
     expand_budget: int = 800
 
 
@@ -555,6 +556,7 @@ SCENARIOS: list[Scenario] = [
             "what's the root cause of the 2s timeout failures",
             "explain the retry jitter fix we landed",
         ],
+        correct_answer_tags=["fix"],  # "so the real fix is retry jitter, not timeout bumping"
         expand_budget=600,
     ),
     Scenario(
@@ -571,6 +573,7 @@ SCENARIOS: list[Scenario] = [
             "did we decide anything about deduplicating v1/v2 auth",
             "thoughts on unifying auth across the two versions",
         ],
+        correct_answer_tags=["cycles_reason"],  # "we tried that last quarter and the dependency cycles got much worse"
         expand_budget=400,
     ),
     Scenario(
@@ -588,6 +591,7 @@ SCENARIOS: list[Scenario] = [
             "why can't we just bump the webhook timeout",
             "what's the plan for handling the stripe timeout issue",
         ],
+        correct_answer_tags=["async_fix"],  # "we should ack the webhook first then queue the database write asynchronously"
         expand_budget=600,
     ),
     Scenario(
@@ -607,6 +611,10 @@ SCENARIOS: list[Scenario] = [
             "what patterns did we notice about database performance",
             "what's the takeaway from the three database incidents",
         ],
+        # Three distinct load-bearing decisions from the 60-turn arc:
+        # the materialized view fix, the read-your-writes pattern for
+        # replica lag, and the schema-review plan for next sprint.
+        correct_answer_tags=["materialized_view", "read_your_writes", "schema_review"],
         expand_budget=900,
     ),
 ]
@@ -640,6 +648,7 @@ class ScenarioResult:
     surfaced: list[str]    # which `must_surface` substrings were found
     missed: list[str]      # which were NOT found (test failure if non-empty)
     rephrasing: Optional["RephrasingResult"] = None  # semantic robustness
+    correctness: Optional["CorrectnessResult"] = None  # correctness check
 
     @property
     def compression_ratio(self) -> float:
@@ -792,6 +801,176 @@ def rephrasing_robustness(bella: "Bella",
         intersection_size=len(intersection_all),
         core_fraction=core_fraction,
     )
+
+
+# ---------------------------------------------------------------------------
+# Correctness — does the pack contain the RIGHT answer, not just a stable one?
+# ---------------------------------------------------------------------------
+#
+# Stability ≠ correctness. A graph that deterministically returns the same
+# 12 wrong beliefs for every query would score 1.00 on rephrasing Jaccard
+# and tell us nothing about whether the retrieval is semantically correct.
+# This test closes that gap: for each scenario, we know the ratified
+# decision ahead of time (we wrote the dialogue), so we can check whether
+# that specific belief appears in the expand pack, how high it ranks, and
+# whether it earned multi-voice status.
+#
+# Still synthetic, still scenario-specific, but NON-CIRCULAR: the ground
+# truth was hand-authored before the ingest/retrieval pipeline ran, so a
+# pass/fail is genuine evidence of correctness, not consistency.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class BeliefCorrectness:
+    """Whether a single correct-answer belief was retrieved correctly."""
+    tag: str                     # scenario tag name (e.g. "fix")
+    expected_text: str           # the turn text that produced the belief
+    survived_compression: bool   # still in the graph after age + emerge + prune
+    multi_voice_in_graph: bool   # n_voices >= 2 (actually ratified)
+    mass_in_graph: float         # current belief mass (or 0.0 if gone)
+    in_pack: bool                # appears in the expand pack
+    rank_in_pack: Optional[int]  # 1-indexed position; None if not present
+    top_3: bool                  # rank_in_pack is in {1, 2, 3}
+
+
+@dataclass
+class CorrectnessResult:
+    """Aggregate correctness across all correct-answer tags for a scenario."""
+    beliefs: list[BeliefCorrectness]
+
+    @property
+    def n_checked(self) -> int:
+        return len(self.beliefs)
+
+    @property
+    def n_survived(self) -> int:
+        return sum(1 for b in self.beliefs if b.survived_compression)
+
+    @property
+    def n_multi_voice(self) -> int:
+        return sum(1 for b in self.beliefs if b.multi_voice_in_graph)
+
+    @property
+    def n_in_pack(self) -> int:
+        return sum(1 for b in self.beliefs if b.in_pack)
+
+    @property
+    def n_top_3(self) -> int:
+        return sum(1 for b in self.beliefs if b.top_3)
+
+    @property
+    def all_correct(self) -> bool:
+        """All correct-answer beliefs survived AND appear in the top-3."""
+        return all(b.in_pack and b.top_3 for b in self.beliefs)
+
+
+def _pack_ranked_texts(pack_text: str) -> list[str]:
+    """Return belief texts from an expand pack in rank order (top first).
+
+    expand() renders beliefs in ranked order (by mass + freshness + relevance),
+    so the line order in the pack text is the rank order. Parsing preserves
+    that order — the returned list's index is 0-indexed rank.
+    """
+    out: list[str] = []
+    for line in pack_text.splitlines():
+        m = _BELIEF_LINE_RE.match(line)
+        if m:
+            text = m.group(1).strip()
+            if text:
+                out.append(text)
+    return out
+
+
+def _text_match(needle: str, haystack: str) -> bool:
+    """Fuzzy-ish text match for belief retrieval in a pack.
+
+    A belief's text in the pack may be truncated (expand sometimes clips
+    long beliefs), paraphrased slightly, or surrounded by rendering cruft.
+    Match succeeds if either:
+      - the needle is a substring of the haystack (exact containment)
+      - the haystack is a substring of the needle (belief got clipped)
+      - the two share a long common substring (≥ 40 chars in either direction)
+
+    For synthetic scenarios the turn text goes into the graph nearly
+    verbatim so exact substring works in practice, but the clipped and
+    common-prefix fallbacks defend against rendering wrinkles.
+    """
+    n = (needle or "").strip().lower()
+    h = (haystack or "").strip().lower()
+    if not n or not h:
+        return False
+    if n in h or h in n:
+        return True
+    # Fall back to shared-prefix check — handles mid-sentence clipping.
+    min_shared = 40
+    for i in range(len(n) - min_shared + 1):
+        if n[i:i + min_shared] in h:
+            return True
+    return False
+
+
+def correctness_check(bella: "Bella",
+                      tags: dict[str, tuple[str, str]],
+                      correct_answer_tags: list[str],
+                      dialogue: list[Turn],
+                      pack_text: str) -> CorrectnessResult:
+    """Measure whether each scenario's hand-authored correct-answer belief
+    survived compression AND appears in the top of the expand pack.
+
+    The ground truth for this test is the text of the `Turn` with the
+    matching tag — we wrote it, so we know exactly what the right answer
+    is. No LLM judging, no human rater required.
+    """
+    # Map tag name → original turn text (for text-based matching)
+    turn_texts: dict[str, str] = {}
+    for t in dialogue:
+        if t.tag:
+            turn_texts[t.tag] = t.text
+
+    ranked = _pack_ranked_texts(pack_text)
+
+    out: list[BeliefCorrectness] = []
+    for tag in correct_answer_tags:
+        expected = turn_texts.get(tag, "")
+        field_bid = tags.get(tag)
+
+        # Is the belief still in the graph after compression?
+        survived = False
+        multi_voice = False
+        mass = 0.0
+        if field_bid is not None:
+            field_name, bid = field_bid
+            g = bella.fields.get(field_name)
+            if g is not None:
+                b = g.beliefs.get(bid)
+                if b is not None:
+                    survived = True
+                    multi_voice = b.n_voices >= 2
+                    mass = float(b.mass)
+
+        # Where does it rank in the expand pack?
+        rank: Optional[int] = None
+        for i, text in enumerate(ranked):
+            if _text_match(expected, text):
+                rank = i + 1   # 1-indexed
+                break
+
+        in_pack = rank is not None
+        top_3 = in_pack and rank <= 3
+
+        out.append(BeliefCorrectness(
+            tag=tag,
+            expected_text=expected,
+            survived_compression=survived,
+            multi_voice_in_graph=multi_voice,
+            mass_in_graph=mass,
+            in_pack=in_pack,
+            rank_in_pack=rank,
+            top_3=top_3,
+        ))
+
+    return CorrectnessResult(beliefs=out)
 
 
 # ---------------------------------------------------------------------------
@@ -1374,8 +1553,10 @@ def run_scenario(scenario: Scenario) -> ScenarioResult:
     set_embedder(HashEmbedder())
     bella = Bella()
 
-    # Phase 1: ingest the dialogue.
-    _ingest_dialogue(bella, scenario.dialogue)
+    # Phase 1: ingest the dialogue. Capture the tags dict so the
+    # correctness check can later resolve correct_answer_tags to
+    # specific belief IDs.
+    tags = _ingest_dialogue(bella, scenario.dialogue)
     stats_in = measure(bella)
 
     # Phase 2: age + emerge + prune.
@@ -1409,11 +1590,23 @@ def run_scenario(scenario: Scenario) -> ScenarioResult:
     # or just surface words? Ask the SAME underlying question 5
     # different ways; measure pack overlap via Jaccard. No LLM judge,
     # no circularity. This is the load-bearing test for the semantic-
-    # quality claim.
+    # quality claim's STABILITY side.
     rephrasing: Optional[RephrasingResult] = None
     if scenario.paraphrasings and len(scenario.paraphrasings) >= 2:
         rephrasing = rephrasing_robustness(
             bella, scenario.paraphrasings, scenario.expand_budget
+        )
+
+    # Phase 5: correctness — does the pack contain the RIGHT answer,
+    # not just a consistent one? Check each hand-authored correct-
+    # answer tag against the compressed graph and the expand pack.
+    # Non-circular because the ground truth was written before
+    # ingest ran.
+    correctness: Optional[CorrectnessResult] = None
+    if scenario.correct_answer_tags:
+        correctness = correctness_check(
+            bella, tags, scenario.correct_answer_tags,
+            scenario.dialogue, pack_text,
         )
 
     return ScenarioResult(
@@ -1438,12 +1631,19 @@ def run_scenario(scenario: Scenario) -> ScenarioResult:
         surfaced=surfaced,
         missed=missed,
         rephrasing=rephrasing,
+        correctness=correctness,
     )
 
 
-def _ingest_dialogue(bella: Bella, dialogue: list[Turn]) -> None:
+def _ingest_dialogue(bella: Bella,
+                     dialogue: list[Turn]) -> dict[str, tuple[str, str]]:
     """Reimplement run_dialogue's body inline so we can drive it with an
-    arbitrary dialogue rather than relying on the module-level DIALOGUE."""
+    arbitrary dialogue rather than relying on the module-level DIALOGUE.
+
+    Returns the tags dict so callers (run_scenario) can look up which
+    (field, belief_id) a given symbolic tag resolved to. The correctness
+    test uses this to find the ratified decision beliefs by tag name.
+    """
     from bellamem.core import Claim, ops
 
     tags: dict[str, tuple[str, str]] = {}
@@ -1469,6 +1669,7 @@ def _ingest_dialogue(bella: Bella, dialogue: list[Turn]) -> None:
 
         if turn.tag and result.belief is not None:
             tags[turn.tag] = (result.field, result.belief.id)
+    return tags
 
 
 # ---------------------------------------------------------------------------

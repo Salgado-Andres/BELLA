@@ -170,6 +170,73 @@ def test_compression_ratio_grows_with_scale(results):
     )
 
 
+def test_correctness_all_answers_in_pack_most_in_top_3(results):
+    """Correctness check — does the pack contain the RIGHT answer?
+
+    For each scenario, we hand-authored the dialogue and know which turn
+    tags correspond to the ratified decisions. This test asserts that
+    those specific beliefs (or their merged successors) appear in the
+    expand pack when an agent asks the test question, and that most of
+    them rank in the top-3.
+
+    Non-circular: the ground truth is hand-authored BEFORE ingest runs.
+    A stable set of wrong beliefs would fail this test even if it
+    passed the rephrasing-robustness test.
+
+    Floors:
+      - 100% of correct-answer beliefs must appear in the pack
+      - At least 50% per scenario must rank in top-3
+      - At least 80% aggregate must rank in top-3
+    """
+    total_checked = 0
+    total_in_pack = 0
+    total_top_3 = 0
+
+    for r in results:
+        c = r.correctness
+        assert c is not None, (
+            f"scenario {r.name!r} has no correct_answer_tags configured"
+        )
+        assert c.n_checked >= 1, (
+            f"scenario {r.name!r} has zero correct-answer beliefs to check"
+        )
+
+        # Every correct answer must appear somewhere in the pack —
+        # strict floor. A correct answer that vanished from the pack
+        # entirely is a retrieval failure we care about deeply.
+        in_pack_rate = c.n_in_pack / c.n_checked
+        assert in_pack_rate >= 1.0 - 1e-6, (
+            f"{r.name!r} only surfaced {c.n_in_pack}/{c.n_checked} "
+            f"correct-answer beliefs in the expand pack "
+            f"(expected 100%). Missing: "
+            f"{[b.tag for b in c.beliefs if not b.in_pack]}"
+        )
+
+        # At least half of the correct-answer beliefs must rank in the
+        # top-3 per scenario — catches regressions where decisions get
+        # buried.
+        top_3_rate = c.n_top_3 / c.n_checked
+        assert top_3_rate >= 0.5, (
+            f"{r.name!r} only placed {c.n_top_3}/{c.n_checked} "
+            f"correct-answer beliefs in the top-3 "
+            f"({100 * top_3_rate:.0f}%, floor 50%). "
+            f"Ranks: {[b.rank_in_pack for b in c.beliefs]}"
+        )
+
+        total_checked += c.n_checked
+        total_in_pack += c.n_in_pack
+        total_top_3 += c.n_top_3
+
+    # Aggregate floor — catches regressions that quietly degrade one
+    # scenario without falling below the per-scenario floor.
+    aggregate_top_3_rate = total_top_3 / total_checked if total_checked else 0
+    assert aggregate_top_3_rate >= 0.8, (
+        f"aggregate top-3 rate across all scenarios dropped to "
+        f"{100 * aggregate_top_3_rate:.0f}% ({total_top_3}/{total_checked}); "
+        f"floor is 80%. Retrieval correctness regressed."
+    )
+
+
 def test_rephrasing_robustness_core_stable_above_floor(results):
     """Semantic-quality checkpoint.
 
