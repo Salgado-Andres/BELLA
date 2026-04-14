@@ -4,6 +4,73 @@ All notable changes will be documented in this file. This project aims
 for [Semantic Versioning](https://semver.org). Until v1.0, everything
 is subject to change.
 
+## [0.2.0a1] — 2026-04-14 — v0.2 hot path: tree+cross-edges, class×nature, dogfooded
+
+First alpha of the v0.2 graph schema. The flat belief field from v0.1
+is replaced with a tree of typed concepts over first-class edges,
+source-grounded citations back to session jsonls, and per-turn LLM
+ingestion via a cheap cached classifier. Clean break — no migration
+from the v0.1 flat graph. Legacy `.graph/default.json` is untouched
+but unused by the new hot path.
+
+### What's new
+
+- **`bellamem.proto` module** — five files (schema, graph, store,
+  clients, ingest) + resume + dispatcher. Concepts are classified on
+  two orthogonal axes: **class** (invariant / decision / observation /
+  ephemeral) and **nature** (factual / normative / metaphysical).
+  Ephemerals have a state machine (open / consumed / retracted /
+  stale). Edges are first-class with their own voices, confidence,
+  and established_at provenance.
+- **`bellamem resume`** now prints a v0.2-native typed structural
+  summary (invariant×metaphysical, invariant×normative, open
+  ephemerals, retracted approaches, dispute edges) instead of the
+  flat replay/expand/surprises composite.
+- **`bellamem save`** now incrementally ingests the latest Claude
+  Code session jsonl into `.graph/v02.json` via
+  `bellamem.proto.ingest_session`. Already-ingested turns skip via
+  `turn.id in graph.sources`, so re-runs are cheap.
+- **`bellamem-guard` hook** rewritten v0.2-native. Reads
+  `.graph/v02.json` directly, advisory sections match the resume
+  layout, blocking check fires on retracted ephemeral topics or
+  dispute-edge target concepts (2-source-ref minimum).
+- **`bellamem-dogfood-cron.sh`** rewired to call `python -m
+  bellamem.proto ingest LATEST_JSONL`. Incremental by design.
+- **Retraction detection groundwork** (`classify_retraction` +
+  `LLMExtractor.pick_retraction`) — LLM-delegated, no lexical
+  fallback, 13 passing spec tests. Not wired into ingest yet.
+- **`bellamem/proto/RULES.md`** — BELLA R1–R6 mapping to v0.2.
+
+### Fixed
+
+- **Cache-poisoning bug in `proto.TurnClassifier`.** Error-fallback
+  responses were being cached and silently masqueraded as real
+  classifications on re-run. Fix: don't cache error responses.
+- **Bench corpus cleanup.** Q01/Q10/Q13/Q14 removed — scope
+  mismatch, answers live in docs/source not conversations.
+
+### What's NOT migrated yet
+
+Most non-hot-path CLI commands still read the flat graph: expand,
+ask, before-edit, entities, bench, audit, emerge, replay,
+surprises, scrub, why, prune, decay, render. Each migrates as
+touched.
+
+### Dogfood
+
+Ran against the full 637-turn session where v0.2 was designed and
+built. Produced 437 concepts, 524 edges, 62 invariant×metaphysical
+concepts capturing the session's architectural arc by name.
+Runtime ~30 min cold cache (~$0.20), free on re-run.
+
+### Breaking
+
+- `bellamem resume` no longer prints replay/expand/surprises — use
+  `bellamem.proto.load_graph()` for parseable output.
+- `bellamem save` no longer prints audit/surprises sections.
+- `bellamem show` groups by class × nature instead of flat tree.
+- `bellamem stats` reports v0.2 counts (sources/concepts/edges).
+
 ## [0.1.2] — 2026-04-13 — second user-reported fix, classifier rot fixes, scenarios harness
 
 The second patch cycle. Ships another user-reported fix from

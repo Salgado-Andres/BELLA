@@ -196,47 +196,66 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
-    _setup_embedder()
-    snap = _resolve_snapshot(args.snapshot)
-    try:
-        bella = load(snap)
-    except EmbedderMismatch as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 3
-    if not bella.fields:
-        print("empty memory")
+    """v0.2: print every concept grouped by class × nature. Legacy
+    --min-mass arg is accepted but ignored."""
+    from bellamem.proto import load_graph
+    g = load_graph()
+    if not g.concepts:
+        print("empty v0.2 graph")
         return 0
-    print(bella.render(max_mass_only=args.min_mass))
+    for cls in ("invariant", "decision", "observation", "ephemeral"):
+        for nat in ("metaphysical", "normative", "factual"):
+            bucket = [c for c in g.concepts.values()
+                      if c.class_ == cls and c.nature == nat]
+            if not bucket:
+                continue
+            print(f"\n== {cls} × {nat} ({len(bucket)}) ==")
+            for c in sorted(bucket, key=lambda c: -len(c.source_refs)):
+                state = f" [{c.state}]" if c.state else ""
+                print(f"  [{len(c.source_refs):2}r]{state} {c.topic}")
     return 0
 
 
 def cmd_stats(args: argparse.Namespace) -> int:
-    _setup_embedder()
-    snap = _resolve_snapshot(args.snapshot)
-    try:
-        bella = load(snap)
-    except EmbedderMismatch as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 3
-    s = bella.stats()
-    print(f"snapshot: {snap}")
-    print(f"fields:   {s['fields']}")
-    print(f"beliefs:  {s['beliefs']}")
-    print(f"roots:    {s['roots']}")
+    """v0.2: summary counts by class / nature / state / edge type."""
+    from bellamem.proto import load_graph
+    from bellamem.proto.store import DEFAULT_GRAPH_PATH
+    g = load_graph()
+    path = DEFAULT_GRAPH_PATH
+    print(f"snapshot:  {path}")
+    print(f"sources:   {len(g.sources)}")
+    print(f"concepts:  {len(g.concepts)}")
+    print(f"edges:     {len(g.edges)}")
     print()
-    print("top-mass beliefs:")
-    for t in s["top_mass"]:
-        print(f"  m={t['mass']:.2f} v={t['voices']}  {t['desc']}")
+    print("by class:")
+    for k in ("invariant", "decision", "observation", "ephemeral"):
+        print(f"  {k}: {len(g.by_class.get(k, ()))}")
+    print("by nature:")
+    for k in ("factual", "normative", "metaphysical"):
+        print(f"  {k}: {len(g.by_nature.get(k, ()))}")
+    eph_states: dict[str, int] = {}
+    for c in g.concepts.values():
+        if c.class_ == "ephemeral":
+            eph_states[c.state or "?"] = eph_states.get(c.state or "?", 0) + 1
+    print(f"ephemeral states: {eph_states}")
+    etypes: dict[str, int] = {}
+    for e in g.edges.values():
+        etypes[e.type] = etypes.get(e.type, 0) + 1
+    print(f"edge types: {etypes}")
     return 0
 
 
 def cmd_reset(args: argparse.Namespace) -> int:
-    snap = _resolve_snapshot(args.snapshot)
-    if os.path.exists(snap):
-        os.unlink(snap)
-        print(f"removed {snap}")
+    """v0.2: wipe .graph/v02.json. Does NOT touch the legacy flat
+    graph at .graph/default.json — use `rm .graph/default.json`
+    directly if you want to remove that."""
+    from bellamem.proto.store import DEFAULT_GRAPH_PATH
+    target = args.snapshot or str(DEFAULT_GRAPH_PATH)
+    if os.path.exists(target):
+        os.unlink(target)
+        print(f"removed {target}")
     else:
-        print(f"no snapshot at {snap}")
+        print(f"no v0.2 graph at {target}")
     return 0
 
 
@@ -557,12 +576,12 @@ def cmd_recall(args: argparse.Namespace) -> int:
     questions, expand's top-3 rate was 0/10 while ask's was 4/10 by
     substring and ~7/10 by semantic inspection.
     """
-    recall_args = argparse.Namespace(
-        snapshot=args.snapshot,
-        focus=args.topic,
-        budget=args.budget,
-    )
-    return cmd_ask(recall_args)
+    # v0.2 alignment: route recall through cmd_resume (typed
+    # structural summary) instead of cmd_ask (flat-graph walker).
+    # The --topic arg is currently ignored in the v0.2 path because
+    # resume_text doesn't yet accept a focus filter — can be added
+    # when the walker query API lands.
+    return cmd_resume(args)
 
 
 def cmd_why(args: argparse.Namespace) -> int:

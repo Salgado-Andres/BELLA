@@ -266,9 +266,19 @@ class TurnClassifier:
             raw = resp.choices[0].message.content or "{}"
             parsed = json.loads(raw)
         except Exception as e:
-            # Fail closed: classify as none, don't crash the ingest loop
+            # Fail closed: return a none fallback to keep the ingest
+            # loop running, but do NOT cache it. Error responses must
+            # never masquerade as real classifications on re-run —
+            # we learned this the hard way on 2026-04-14 when missing
+            # OPENAI_API_KEY caused 637 turns to cache as act=none,
+            # and the next run silently hit the cache instead of
+            # retrying. If the same turn happens to fail repeatedly,
+            # it'll retry each time — acceptable cost for correctness.
             print(f"  [classify error] {e}")
-            parsed = {"act": "none", "cites": [], "creates": [], "concept_edges": []}
+            return ClassifyResult.from_raw(
+                {"act": "none", "cites": [], "creates": [], "concept_edges": []},
+                was_cached=False,
+            )
 
         self._cache[key] = parsed
         self._dirty = True
