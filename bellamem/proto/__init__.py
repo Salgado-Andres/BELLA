@@ -17,6 +17,7 @@ from bellamem.proto.schema import (
 from bellamem.proto.graph import Graph
 from bellamem.proto.store import load_graph, save_graph
 from bellamem.proto.ingest import ingest_session
+from bellamem.proto.resume import resume_text
 
 __all__ = [
     "Source", "Concept", "Edge", "Graph",
@@ -24,4 +25,5 @@ __all__ = [
     "slugify_topic",
     "load_graph", "save_graph",
     "ingest_session",
+    "resume_text",
 ]
