@@ -4,6 +4,73 @@ All notable changes will be documented in this file. This project aims
 for [Semantic Versioning](https://semver.org). Until v1.0, everything
 is subject to change.
 
+## [0.2.2] — 2026-04-14 — graph-health pass: rebuild-mass, prompt v2, audit layer
+
+A graph-quality session after 0.2.1 — three structural fixes landed
+together. Motivation: a diagnostic scan showed 85% of concepts stuck
+at the m=0.5 mass floor, 97% of edges turn-to-concept instead of
+concept-to-concept, and an LLM extractor that split single ideas
+into five sub-attribute concepts. The graph read as a transcript
+with tags, not a concept map.
+
+### New
+
+- **`python -m bellamem.proto rebuild-mass`** — one-shot R1 repair
+  pass. Replays each concept's stored `source_refs` through `cite()`
+  to recompute `mass` and `voices`. Used to fix graphs built by the
+  legacy `experiments/proto_tree.py` path which bypassed `cite()`
+  entirely (its own ProtoGraph dataclass had no voices/mass at all).
+  On the live graph: 531/627 frozen concepts → 0, top mass 0.769 → 0.881.
+  `--dry-run` flag for preview-without-save.
+
+- **`python -m bellamem.proto audit`** — entropy + health signals
+  over the current graph. Five metrics with ok/soft/hard verdicts:
+  `concept_density`, `structural_edge_ratio`, `mass_floor_fraction`,
+  `mass_spread` (bucket-entropy of mass distribution), and
+  `orphan_refs`. Exits 1 on any hard flag. The `bellamem resume`
+  footer now surfaces red flags inline so structural problems are
+  visible in every resume, not just on explicit audit.
+
+- **Prompt v2** for `TurnClassifier` (cache-busted from v1). Three
+  targeted changes:
+  - **ONE CONCEPT PER IDEA** rule with an explicit bad/good example
+    taken from live data — the classifier was splitting "concept
+    map visual vocabulary" into five parallel sub-attribute concepts.
+  - `concept_edges` promoted to a first-class output with examples
+    of when to use `cause` / `elaborate` / `dispute`. Previously it
+    was a one-liner at the bottom.
+  - "Don't default to support" rule. Support was 436/691 edges in
+    the live graph; it's the weakest cc-edge signal and should be
+    the fallback, not the default.
+
+### Changed
+
+- `DEDUP_COSINE` lowered from 0.85 to 0.78 for tighter near-variant
+  merging at ingest time in `find_similar_concept()`.
+
+### Fixed
+
+- Mock embedder in `tests/test_proto.py` now produces zero-centered
+  32-dim vectors (was uint8-based 8-dim, all-positive). The lower
+  `DEDUP_COSINE` hit the old embedder's ~0.75 cosine noise floor
+  and false-merged unrelated topics in one test.
+
+### Added tests
+
+- `tests/test_proto_audit.py` — 14 tests covering each audit signal
+  and the aggregate AuditReport flag behavior
+- 2 tests in `tests/test_proto.py` for `rebuild_mass_from_source_refs`
+
+48 proto tests total, all passing.
+
+### Deliberately NOT included
+
+- Retroactive near-duplicate merge pass via hand-maintained stopword
+  jaccard — violated the no-ad-hoc-stoplists rule. The real fix for
+  concept explosion lives in the extractor prompt (above).
+- Baseline-diff surprise signals ("what moved since last session").
+  Needs session-boundary tracking and a persisted snapshot. Deferred.
+
 ## [0.2.1] — 2026-04-14 — docs: absolute image URLs for PyPI rendering
 
 PyPI renders the project description from the uploaded wheel and
