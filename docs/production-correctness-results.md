@@ -86,13 +86,100 @@ At budget=400 (~8–10 beliefs), 5/10 questions lost their ground-truth match en
 
 The rephrasing-robustness result is still technically correct — the same 5 high-mass beliefs come back for any rephrasing of any query. The stable core is stable because **it's ignoring the query entirely**. That's a different interpretation than the one I wrote into `scenarios.md`, and a less flattering one.
 
-## The honest takeaway
+## The honest takeaway — revised after reading expand's source
 
-**Bella's `expand` is mass-dominated at production forest sizes and does not rank query-relevant beliefs prominently.** The ratified decisions from today's session are retrievable (in the pack, at ranks 8–32) but not retrievable *prominently* (top-3 rate 0/10). An agent asking "what did we decide about X?" gets back the top-5 cross-session invariants first, not the specific X-decision.
+After running the same test via `bellamem before-edit` and getting the
+**same top-5 beliefs across all queries**, I went back and read
+`core/expand.py`. The top-of-pack behavior isn't a weight-tuning bug.
+It's the architectural intent:
 
-This is the opposite of what the synthetic correctness test implied, and it explains why the LLM-judge bench's 92% number has always felt brittle: on a 1834-belief forest where the bench questions happen to align with mass-dominant beliefs, retrieval works; on a real multi-topic session where mass and query-relevance decouple, retrieval degrades badly.
+```python
+# expand.py docstring:
+#   60%  high-mass global layer (rules/decisions, tie-broken by relevance)
+#   35%  relevance layer (cosine + freshness bonus)
+#    5%  dispute layer
 
-The synthetic tests weren't wrong, they were too easy. The user was right to push for production validation.
+# Final ordering (expand.py ~line 238):
+bucket_order = {"mass": 0, "dispute": 1, "relevant": 2}
+pack.lines.sort(key=lambda ln: (bucket_order.get(ln.bucket, 9), -ln.score))
+```
+
+**The mass bucket is sorted to the top of every pack, always.** Query
+text influences the relevance bucket (35% of the budget) but has
+essentially no effect on the mass bucket. `expand` is designed as a
+**"what rules apply?" retriever** — the load-bearing question for the
+edit-guard use case. For that use case, pinning cross-cutting
+invariants to the top is correct: before you touch code, here's what
+we've already decided about this system.
+
+My production test was asking a *different* class of question:
+retrospective session Q&A — "what version did we ship today?", "what
+did Salgado-Andres report?", "why did we drop the budget-ceiling
+framing?" Those aren't edit-time invariant lookups. They're
+conversational retrieval against specific recent events.
+
+### Reframing the diagnosis
+
+| prior framing | correct framing |
+|---|---|
+| "expand is mass-dominated at scale (bug)" | **"expand is invariant-first by design, optimized for edit-time rule retrieval"** |
+| "need to tune mass vs relevance weights" | **"need a second retrieval mode for general Q&A — relevance-first, mass as tiebreak"** |
+| "synthetic tests were too easy" | **"synthetic tests had questions that matched the mass layer; production tests asked Q&A questions that land in the relevance layer"** |
+| "the bench's 92% LLM judge is wrong" | **"the bench measured the right thing — invariant/decision retrieval — using questions that matched the intended use case"** |
+
+### Connection to issue #2
+
+This connects directly to `immartian/bellamem#2` (v0.2 command surface
+reduction). The issue proposed a `bellamem ask` unified retrieval verb,
+framed at the time as UX cleanup — collapse `expand` / `recall` / `why`
+/ `before-edit` into one verb with intent classification. After this
+result, I realize `bellamem ask` isn't just UX: it's a **different
+retrieval mode** with the bucket priority inverted.
+
+```
+ask    (new, proposed):  relevance bucket first (60%), mass second (30%), dispute third (10%)
+expand (current):        mass bucket first (60%), dispute (5%), relevance third (35%)
+```
+
+Same belief graph, same cosine scoring, same mass values, same decay —
+just different bucket ordering in the final pack. An agent asking *"what
+did we decide about X today?"* routes to `ask` and gets relevance-first
+retrieval. An edit guard firing before a `Write` tool call asks *"what
+rules apply to editing auth.py?"* and routes to `expand` for
+invariant-first retrieval. Both modes use the exact same underlying
+Bella calculus.
+
+This reframes issue #2 from "command surface reduction" to
+**"add the missing relevance-first retrieval mode; keep `expand` as the
+invariant-first mode; make `ask` the default daily driver"**. That's a
+capability gap, not a UX cleanup — but the fix is structurally small
+(a new function, new budget partition, same underlying ranking layers).
+
+## What this test actually showed
+
+1. **Bella's invariant-first retrieval works as designed.** Every
+   production query returned the top-5 cross-session invariants
+   correctly — *that's the right answer for an edit guard asking "what
+   rules should I respect?"* It's just not the right answer for a user
+   asking "what did we do today?"
+
+2. **The synthetic correctness test was measuring invariant retrieval,
+   not general Q&A retrieval.** The hand-authored scenarios had
+   ratified decisions that by construction became high-mass beliefs,
+   so they landed in the invariant layer and ranked top-3. That result
+   is still correct for the invariant case.
+
+3. **General Q&A retrieval is a missing capability, not a broken one.**
+   Bella currently ships one retrieval mode. The pitch's implicit
+   "ask and get the right answer" framing requires a second mode that
+   doesn't yet exist. Until it does, users doing session Q&A have to
+   process larger packs or use `bellamem replay` (which IS chronological
+   retrieval and is closer to what they want).
+
+4. **The README framing needs clarifying.** It currently says expand
+   answers *"what do we believe about X, ranked by importance?"* —
+   which is true in the invariant sense but implies broader Q&A
+   capability than the architecture supports. Worth a small edit.
 
 ## Possible root causes (not yet investigated)
 
