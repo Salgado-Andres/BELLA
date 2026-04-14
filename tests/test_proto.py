@@ -92,6 +92,24 @@ def test_non_ephemeral_rejects_state():
     with pytest.raises(ValueError):
         Concept(id="x", topic="x", class_="invariant", nature="factual", state="open")
 
+def test_parse_timestamp_iso8601_z():
+    """Claude-code timestamps come as ISO 8601 with trailing Z.
+    Parser should normalize and return a POSIX float."""
+    from bellamem.proto.ingest import _parse_timestamp
+    t = _parse_timestamp("2026-04-11T17:03:33.105Z")
+    assert isinstance(t, float)
+    # Sanity check: 2026-04-11 ≈ 1776171813 POSIX, give it a wide range
+    assert 1.7e9 < t < 2.0e9
+
+
+def test_parse_timestamp_handles_none_and_garbage():
+    from bellamem.proto.ingest import _parse_timestamp
+    assert _parse_timestamp(None) is None
+    assert _parse_timestamp("") is None
+    assert _parse_timestamp("not-a-date") is None
+    assert _parse_timestamp(12345) is None  # type: ignore[arg-type]
+
+
 def test_slugify_stable():
     assert slugify_topic("Walker Primitive") == slugify_topic("walker primitive")
     assert slugify_topic("walker primitive") == "walker-primitive"

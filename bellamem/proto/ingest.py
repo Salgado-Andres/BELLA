@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -46,6 +47,24 @@ def _extract_turn_text(msg: dict) -> str:
                 parts.append(item.get("text", ""))
         return "\n".join(parts)
     return ""
+
+
+def _parse_timestamp(raw: Optional[str]) -> Optional[float]:
+    """Parse a claude-code ISO-8601 timestamp string to a float
+    (POSIX seconds). Returns None on any failure — Source.timestamp
+    is optional so downstream code tolerates missing values.
+
+    Claude-code format: '2026-04-11T17:03:33.105Z' — trailing 'Z'
+    means UTC but Python's fromisoformat rejects the Z prior to 3.11
+    in some cases. Normalize to '+00:00' for broad compatibility.
+    """
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        norm = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+        return datetime.fromisoformat(norm).timestamp()
+    except Exception:
+        return None
 
 
 def _derive_session_id(jsonl_path: Path, records: list[dict]) -> str:
@@ -102,6 +121,7 @@ def read_session_turns(jsonl_path: Path) -> list[Source]:
             speaker=t,
             turn_idx=idx,
             text=text[:MAX_TURN_CHARS],
+            timestamp=_parse_timestamp(rec.get("timestamp")),
         ))
         idx += 1
     return turns
