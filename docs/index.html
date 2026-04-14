@@ -54,10 +54,26 @@
   }
   .hero .badges a:hover { border-color: var(--accent); }
   .hero .install {
-    display: inline-block; background: #0f172a; border: 1px solid var(--panel2);
-    padding: 8px 14px; border-radius: 6px; font-family: ui-monospace, monospace;
-    font-size: 13px; color: #a5f3fc; margin-top: 24px;
+    display: inline-flex; align-items: center; gap: 14px;
+    background: #050910; border: 1px solid #334155;
+    padding: 14px 20px; border-radius: 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 18px; color: #a5f3fc; margin-top: 28px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.04);
+    cursor: pointer; user-select: none;
+    transition: border-color 0.15s, transform 0.08s;
   }
+  .hero .install:hover { border-color: var(--accent); }
+  .hero .install:active { transform: translateY(1px); }
+  .hero .install .prompt { color: #64748b; }
+  .hero .install .cmd { color: #e5e7eb; }
+  .hero .install .cmd .pkg { color: #a5f3fc; font-weight: 600; }
+  .hero .install .copy-icon {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #64748b; font-size: 12px; font-family: -apple-system, sans-serif;
+    padding-left: 14px; border-left: 1px solid #1e293b; margin-left: 4px;
+  }
+  .hero .install.copied .copy-icon { color: #86efac; }
   main { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
   section { margin-bottom: 56px; }
   h2 {
@@ -132,7 +148,11 @@
     Concepts, not chats. A local graph that accumulates mass on what
     gets ratified and decays what doesn't.
   </div>
-  <div class="install">pip install bellamem</div>
+  <div class="install" id="install" onclick="copyInstall()" title="click to copy">
+    <span class="prompt">$</span>
+    <span class="cmd">pip install <span class="pkg">bellamem</span></span>
+    <span class="copy-icon"><span id="copy-label">copy</span></span>
+  </div>
   <div class="badges">
     <a href="https://github.com/immartian/bellamem">GitHub</a>
     <a href="https://pypi.org/project/bellamem/">PyPI</a>
@@ -260,5 +280,22 @@ xdg-open v02.html   # or `open v02.html` on macOS</pre>
   bellamem · AGPL-3.0 ·
   <a href="https://github.com/immartian/bellamem">github.com/immartian/bellamem</a>
 </footer>
+
+<script>
+  function copyInstall() {
+    const box = document.getElementById("install");
+    const label = document.getElementById("copy-label");
+    navigator.clipboard.writeText("pip install bellamem").then(() => {
+      box.classList.add("copied");
+      label.textContent = "copied ✓";
+      setTimeout(() => {
+        box.classList.remove("copied");
+        label.textContent = "copy";
+      }, 1600);
+    }).catch(() => {
+      label.textContent = "select & copy";
+    });
+  }
+</script>
 </body>
 </html>
