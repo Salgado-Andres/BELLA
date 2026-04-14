@@ -88,6 +88,20 @@ class Belief:
     # dynamics, sources = "which line of which session did this evidence
     # come from?"
     sources: list[tuple[str, int]] = field(default_factory=list)
+    # PsiCollapse5A / SIMTraversal additive metadata (defaults preserve
+    # legacy behavior for snapshots and all existing codepaths).
+    scope: str = "STANDARD"
+    scope_override: bool = False
+    scope_override_reason: Optional[str] = None
+    anchor_blocked: bool = False
+    anchor_blocked_reason: Optional[str] = None
+    anchor_blocked_at: Optional[int] = None
+    is_anchor: bool = False
+    anchor_cycle: Optional[int] = None
+    anchor_void_until_cycle: Optional[int] = None
+    source_kind: str = "ORGANIC"
+    content: dict = field(default_factory=dict)
+    recurrence_count: int = 0
 
     @property
     def mass(self) -> float:
@@ -126,6 +140,7 @@ class Belief:
             effective_lr = 1.0 + (lr - 1.0) * attenuate_same_voice
         delta = log_lr(effective_lr)
         self.log_odds += delta
+        self.recurrence_count += 1
         self._enforce_floor()
         now = time.time()
         self.jumps.append((now, delta, voice or ""))
@@ -163,6 +178,18 @@ class Belief:
             "mass_floor": self.mass_floor,
             "jumps": [list(j) for j in self.jumps],
             "sources": [list(s) for s in self.sources],
+            "scope": self.scope,
+            "scope_override": self.scope_override,
+            "scope_override_reason": self.scope_override_reason,
+            "anchor_blocked": self.anchor_blocked,
+            "anchor_blocked_reason": self.anchor_blocked_reason,
+            "anchor_blocked_at": self.anchor_blocked_at,
+            "is_anchor": self.is_anchor,
+            "anchor_cycle": self.anchor_cycle,
+            "anchor_void_until_cycle": self.anchor_void_until_cycle,
+            "source_kind": self.source_kind,
+            "content": dict(self.content),
+            "recurrence_count": self.recurrence_count,
         }
         if not strip_embedding:
             d["embedding"] = self.embedding
@@ -202,6 +229,18 @@ class Belief:
             mass_floor=d.get("mass_floor", 0.0),
             jumps=jumps,
             sources=sources,
+            scope=str(d.get("scope", "STANDARD")),
+            scope_override=bool(d.get("scope_override", False)),
+            scope_override_reason=d.get("scope_override_reason"),
+            anchor_blocked=bool(d.get("anchor_blocked", False)),
+            anchor_blocked_reason=d.get("anchor_blocked_reason"),
+            anchor_blocked_at=d.get("anchor_blocked_at"),
+            is_anchor=bool(d.get("is_anchor", False)),
+            anchor_cycle=d.get("anchor_cycle"),
+            anchor_void_until_cycle=d.get("anchor_void_until_cycle"),
+            source_kind=str(d.get("source_kind", "ORGANIC")),
+            content=dict(d.get("content") or {}),
+            recurrence_count=int(d.get("recurrence_count", 0)),
         )
         return b
 

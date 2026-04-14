@@ -46,6 +46,7 @@ import time
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional
 
 from .embed import current_embedder, EmbedderMismatch
+from .invariants import ConflictRecord, TraversalRecord
 
 if TYPE_CHECKING:
     from .bella import Bella
@@ -244,6 +245,17 @@ def save(bella: "Bella", path: str) -> None:
         },
         "field_order": list(bella.fields.keys()),
         "cursor": dict(bella.cursor),
+        "conflicts": {
+            cid: c.to_dict() for cid, c in bella.conflicts.items()
+        },
+        "conflict_version": bella.conflict_version,
+        "traversals": {
+            tid: t.to_dict() for tid, t in bella.traversals.items()
+        },
+        "guard_blocks": list(bella.guard_blocks),
+        "demoted_conflict_count": bella.demoted_conflict_count,
+        "last_verification_belief_id": bella.last_verification_belief_id,
+        "current_cycle": bella.current_cycle,
     }
 
     # Write graph.json atomically.
@@ -296,6 +308,19 @@ def load_graph_only(path: str) -> "Bella":
             b.fields[name] = Gene.from_dict(gd)
     b.cursor = dict(d.get("cursor", {}))
     b.decayed_at = float(d.get("decayed_at", d.get("saved_at", time.time())))
+    b.conflicts = {
+        cid: ConflictRecord.from_dict(cd)
+        for cid, cd in (d.get("conflicts") or {}).items()
+    }
+    b.conflict_version = int(d.get("conflict_version", 0))
+    b.traversals = {
+        tid: TraversalRecord.from_dict(td)
+        for tid, td in (d.get("traversals") or {}).items()
+    }
+    b.guard_blocks = list(d.get("guard_blocks", []))
+    b.demoted_conflict_count = int(d.get("demoted_conflict_count", 0))
+    b.last_verification_belief_id = d.get("last_verification_belief_id")
+    b.current_cycle = int(d.get("current_cycle", 0))
     return b
 
 
@@ -356,6 +381,19 @@ def load(path: str) -> "Bella":
     # so the first decay pass after upgrade computes Δt from the last
     # time the snapshot was written, not from the current load time.
     b.decayed_at = float(d.get("decayed_at", d.get("saved_at", time.time())))
+    b.conflicts = {
+        cid: ConflictRecord.from_dict(cd)
+        for cid, cd in (d.get("conflicts") or {}).items()
+    }
+    b.conflict_version = int(d.get("conflict_version", 0))
+    b.traversals = {
+        tid: TraversalRecord.from_dict(td)
+        for tid, td in (d.get("traversals") or {}).items()
+    }
+    b.guard_blocks = list(d.get("guard_blocks", []))
+    b.demoted_conflict_count = int(d.get("demoted_conflict_count", 0))
+    b.last_verification_belief_id = d.get("last_verification_belief_id")
+    b.current_cycle = int(d.get("current_cycle", 0))
 
     # v3: populate embeddings from the sibling bin file.
     if version >= 3:

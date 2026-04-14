@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING
 
 from .gene import Belief, REL_COUNTER
 from .embed import cosine
+from .invariants import traversal_metrics
 
 if TYPE_CHECKING:
     from .bella import Bella
@@ -122,6 +123,7 @@ class AuditReport:
     garbage_fields: list[GarbageField] = field(default_factory=list)
     top_ratified: list[tuple[str, Belief]] = field(default_factory=list)
     top_disputes: list[tuple[str, Belief]] = field(default_factory=list)
+    traversal_stats: dict = field(default_factory=dict)
 
     def is_clean(self) -> bool:
         # "Clean" now means: no bandaid piles AND no root gluts AND no
@@ -301,6 +303,7 @@ def audit(bella: "Bella", *, top_n: int = 10) -> AuditReport:
     # 7) Top disputes by mass
     disputes.sort(key=lambda t: t[1].mass, reverse=True)
     report.top_disputes = disputes[:top_n]
+    report.traversal_stats = traversal_metrics(bella)
 
     return report
 
@@ -413,6 +416,20 @@ def render_report(r: AuditReport, *, max_per_section: int = 10) -> str:
     else:
         for fname, b in r.top_disputes[:max_per_section]:
             lines.append(f"  ⊥ m={b.mass:.2f} v={b.n_voices}  [{fname[:22]}]  {b.desc[:100]}")
+    lines.append("")
+
+    # Traversal instrumentation
+    lines.append("## traversal audit (SIMTraversal)")
+    ts = r.traversal_stats or {}
+    lines.append(f"  quarantined conflicts: {ts.get('quarantined_conflicts', 0)}")
+    lines.append(f"  promoted conflicts:    {ts.get('promoted_conflicts_lifetime', 0)}")
+    lines.append(f"  demoted conflicts:     {ts.get('demoted_conflicts_lifetime', 0)}")
+    gb = ts.get("guard_block_attribution", {})
+    lines.append(
+        f"  guard correction rate (organic/traversal): "
+        f"{gb.get('organic_correction_rate', 0.0):.2f}/"
+        f"{gb.get('traversal_correction_rate', 0.0):.2f}"
+    )
     lines.append("")
 
     return "\n".join(lines)
