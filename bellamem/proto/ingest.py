@@ -48,21 +48,45 @@ def _extract_turn_text(msg: dict) -> str:
     return ""
 
 
+def _derive_session_id(jsonl_path: Path, records: list[dict]) -> str:
+    """Stable session_id for cross-run idempotency.
+
+    Prefers the `sessionId` field from the jsonl records themselves
+    (first 8 chars of the UUID) — this way a snapshot copy of the
+    same conversation produces the same session_id as the original,
+    which is what makes incremental ingest skip work across runs.
+
+    Falls back to the filename stem (first 8 chars) for non-
+    claude-code sources that don't carry a sessionId.
+    """
+    for rec in records:
+        sid = rec.get("sessionId")
+        if isinstance(sid, str) and sid:
+            return sid[:8]
+    return jsonl_path.stem[:8]
+
+
 def read_session_turns(jsonl_path: Path) -> list[Source]:
     """Read a claude-code jsonl session and return Sources in order.
 
     Skips tool-use notifications and bracketed system messages.
     Each turn gets a 0-based turn_idx counted only among accepted
-    speaker turns (not raw file line numbers).
+    speaker turns (not raw file line numbers). session_id is
+    derived from jsonl contents (stable across filename changes).
     """
-    session_id = jsonl_path.stem[:8]
-    turns: list[Source] = []
-    idx = 0
-    for line in jsonl_path.read_text().splitlines():
+    lines = jsonl_path.read_text().splitlines()
+    records: list[dict] = []
+    for line in lines:
         try:
-            rec = json.loads(line)
+            records.append(json.loads(line))
         except Exception:
             continue
+
+    session_id = _derive_session_id(jsonl_path, records)
+
+    turns: list[Source] = []
+    idx = 0
+    for rec in records:
         t = rec.get("type")
         if t not in ("user", "assistant"):
             continue

@@ -642,11 +642,33 @@ def cmd_save(args: argparse.Namespace) -> int:
     # (--snapshot, --no-emerge, --audit-top, --surprise-top,
     # --all-sessions, --no-llm, --tail, --force-audit) are accepted
     # for CLI compatibility but mostly ignored.
+    import fcntl
     from pathlib import Path
     from bellamem.proto import load_graph, save_graph, ingest_session
     from bellamem.proto.clients import Embedder, TurnClassifier
     from bellamem.proto.store import DEFAULT_GRAPH_PATH
     import tempfile
+
+    # Acquire the same flock the dogfood cron uses so cmd_save and
+    # the cron serialize on one process at a time. Without this, a
+    # user-invoked `bellamem save` can race a concurrent cron tick,
+    # both load the graph at different times, and whichever saves
+    # last silently drops the other's in-flight concepts. Non-
+    # blocking — if the cron is currently running, bail with a
+    # clear message rather than queueing.
+    lock_path = "/tmp/bellamem-dogfood-cron.lock"
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(
+            f"bellamem save: another ingest is already running "
+            f"(lock: {lock_path}).\n"
+            f"  Likely the dogfood cron is mid-tick. Wait for it to "
+            f"finish (check `tail .graph/dogfood-cron.log`) and retry.",
+            file=sys.stderr,
+        )
+        return 2
 
     # Find latest session jsonl. The claude-code projects dir encodes
     # the cwd in its name — we walk the conventional location.
