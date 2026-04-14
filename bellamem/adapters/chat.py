@@ -194,6 +194,127 @@ _DEMONSTRATIVE_RE = re.compile(
     re.I,
 )
 
+# Decision-anchor sentences for language-agnostic primary-claim scoring.
+# Used by the ratification path in adapters/claude_code.py to identify
+# which claim from a multi-claim assistant turn is the load-bearing
+# decision — *regardless of language*. The anchors are short canonical
+# phrases that capture distinct decision-bearing speech acts:
+#
+#   - affirmative decisions ("we should X", "let's go with X", "I'll do X")
+#   - rules/invariants ("must always X", "X is a hard rule")
+#   - explicit denials ("don't do X", "reject X")
+#
+# A claim's "decision score" is the max cosine similarity between its
+# embedding and any anchor. With OpenAI text-embedding-3-small (or any
+# multilingual embedder), a French claim like "nous devrions faire ceci"
+# will land near the English anchor "we should do this" because the
+# embedding space is trained jointly across 100+ languages — no per-
+# locale regex pack required.
+#
+# A few non-English seed anchors are mixed in to bias the centroid
+# slightly toward the multilingual basin, in case the embedder treats
+# English as a default language and clusters non-English claims further
+# from English anchors than expected.
+#
+# This is the structural alternative to the regex-based vocabulary in
+# _DECISION_RE / _RULE_RE / _DENIAL_MARKERS, which are English-only by
+# nature. The two scoring paths are designed to combine: regex catches
+# strong English signals cheaply, semantic anchors catch everything else.
+DECISION_ANCHORS = [
+    # Affirmative decisions (English seeds)
+    "we should do this",
+    "let's go with this approach",
+    "I will implement this",
+    "the plan is to ship this",
+    "we decided to use this",
+    "this is the right call",
+    # Rules / invariants
+    "this must always hold true",
+    "this is a hard rule we never break",
+    # Denials / rejections
+    "do not do this, instead use that",
+    "reject this approach",
+    # Multilingual primers (small set, biases the anchor space toward
+    # non-English clusters). The multilingual embedder should already
+    # bridge English ↔ other languages; these are belt-and-braces.
+    "nous devrions faire cela",     # French: "we should do this"
+    "decidimos usar esto",          # Spanish: "we decided to use this"
+    "wir sollten das machen",       # German: "we should do this"
+]
+
+# Cache of anchor embeddings, keyed by embedder signature (name).
+# Lazy-init on first use; recomputed when the embedder swaps.
+_anchor_embedding_cache: dict[str, list[list[float]]] = {}
+
+
+def get_decision_anchor_embeddings() -> list[list[float]]:
+    """Return the embedding vectors for DECISION_ANCHORS under the
+    current embedder, computing and caching them on first call.
+
+    Cache is keyed by embedder.name so a HashEmbedder → OpenAI swap
+    (which happens routinely between tests and production) recomputes
+    the anchors instead of using stale vectors of the wrong dimension.
+    """
+    from ..core.embed import current_embedder
+    emb = current_embedder()
+    sig = emb.name
+    cached = _anchor_embedding_cache.get(sig)
+    if cached is not None:
+        return cached
+    if hasattr(emb, "embed_batch"):
+        try:
+            anchors = list(emb.embed_batch(DECISION_ANCHORS))
+        except Exception:
+            anchors = [emb.embed(t) for t in DECISION_ANCHORS]
+    else:
+        anchors = [emb.embed(t) for t in DECISION_ANCHORS]
+    _anchor_embedding_cache[sig] = anchors
+    return anchors
+
+
+def semantic_decision_score(belief_embedding: list[float] | None) -> float:
+    """Score a belief as decision-bearing, language-agnostic.
+
+    Returns a float in [0, 3] roughly comparable to the integer weights
+    the regex scorers assign (3 for a strong decision marker, 0 for
+    irrelevant). Computed as max cosine similarity between the belief's
+    embedding and any decision anchor, with a threshold-and-rescale
+    mapping:
+
+        cosine < 0.30  → 0    (irrelevant — no decision quality)
+        cosine 0.30-0.70 → 0-3 (linear ramp)
+        cosine > 0.70  → 3    (saturated — strong decision quality)
+
+    The 0.30 floor matches the FIELD_MATCH cosine threshold used
+    elsewhere in core/. Values below that aren't meaningfully related.
+
+    Returns 0.0 if the belief has no embedding (HashEmbedder graphs
+    sometimes have placeholder vectors, and this scorer should return
+    a non-signal in that case so the regex scorer can still drive
+    ratification).
+    """
+    if not belief_embedding:
+        return 0.0
+    from ..core.embed import cosine
+    try:
+        anchors = get_decision_anchor_embeddings()
+    except Exception:
+        return 0.0
+    if not anchors:
+        return 0.0
+    max_sim = 0.0
+    for a in anchors:
+        s = cosine(belief_embedding, a)
+        if s > max_sim:
+            max_sim = s
+    if max_sim < 0.30:
+        return 0.0
+    if max_sim >= 0.70:
+        return 3.0
+    # Linear ramp from 0.30 → 0 to 0.70 → 3
+    return (max_sim - 0.30) * 7.5
+
+
 # Bellamem's own graph output fingerprints — if a sentence contains one
 # of these patterns, it's a direct quote of audit/expand/surprise output,
 # not a new claim. Filtering here prevents the graph from re-ingesting

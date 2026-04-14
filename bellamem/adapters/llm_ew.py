@@ -130,6 +130,45 @@ Rules:
 """
 
 
+_PRIMARY_CLAIM_SYSTEM = (
+    "You identify the load-bearing decision in an assistant message. "
+    "The user has just affirmed ('yes', 'ok', 'do it', or a language-"
+    "specific equivalent) the assistant's previous message. Your job is "
+    "to pick which of several candidate claims the user is most likely "
+    "confirming — the one that represents an action, decision, rule, or "
+    "explicit rejection that the user would want recorded as ratified. "
+    "Skip observations, diagnostic statements, status updates, and "
+    "meta-commentary. Return strict JSON."
+)
+
+_PRIMARY_CLAIM_USER_TEMPLATE = """Below is an assistant message and a
+list of candidate claims extracted from it. The user responded with a
+short affirmation ('yes', 'ok', 'do it', etc.). Pick the claim number
+that the user is most likely confirming — the load-bearing decision,
+rule, or rejection. Return ONLY the claim number (1-indexed) or 0 if
+none of the candidates is a decision.
+
+Language-agnostic: the candidates may be in any language. Pick based
+on MEANING (is this a decision? an action? a rule?), not vocabulary.
+
+Assistant message:
+\"\"\"
+{turn_text}
+\"\"\"
+
+Candidates:
+{candidates}
+
+Return: {{"choice": <integer from 0 to {max_choice}>}}
+Rules:
+- Choose the claim that represents a DECISION, ACTION, RULE, or REJECTION
+- Skip pure observations, status reports, and meta-commentary
+- Return 0 if no candidate is a genuine decision (user's 'yes' was
+  probably a social acknowledgment, not a commitment)
+- Language doesn't matter — pick by semantic role, not keywords
+"""
+
+
 _SELF_USER_TEMPLATE = """Identify habitual self-observations in the text below.
 
 Extract statements like:
@@ -307,6 +346,64 @@ class LLMExtractor:
         # Sanitize to the contract: lowercase, alnum+underscore, ≤ 40
         sanitized = re.sub(r"[^a-z0-9_]+", "_", raw.lower()).strip("_")[:40]
         return sanitized
+
+    def pick_primary_claim(self, turn_text: str,
+                           candidates: list[str]) -> int:
+        """Pick the load-bearing decision among candidate claims.
+
+        Used by the ratification path in adapters/claude_code.py as the
+        stage-2 disambiguator after embedding-based scoring (stage 1).
+        The caller invokes this only when stage 1 couldn't decisively
+        rank one candidate — either multiple claims have similar
+        decision scores, or none of them have strong stage-1 signal
+        but there are multiple candidates to choose from.
+
+        Returns:
+          - A 0-indexed int pointing into `candidates` if the LLM
+            identifies a primary decision
+          - -1 if the LLM returned 0 (no candidate is a genuine
+            decision — the user's 'ya' was a social acknowledgment,
+            not a commitment). Caller should fall back to the
+            positional last claim in that case.
+
+        Cache-first. The key is md5(turn_text + joined_candidates),
+        so re-ingesting the same session is free on the second pass.
+        Language-agnostic by virtue of the underlying LLM — French,
+        Spanish, German, Japanese content all work without per-
+        language prompts.
+        """
+        if not candidates or len(candidates) > 20:
+            return -1
+        # Build a deterministic cache key from turn text + candidates
+        # joined. If either changes, we re-query.
+        joined = "\n".join(f"{i + 1}. {c[:300]}"
+                           for i, c in enumerate(candidates))
+        cache_text = f"{turn_text[:2000]}||{joined}"
+        key = self._key("primary_claim", cache_text)
+        if key in self._cache:
+            entry = self._cache[key]
+        else:
+            user = _PRIMARY_CLAIM_USER_TEMPLATE.format(
+                turn_text=turn_text[:2000],
+                candidates=joined,
+                max_choice=len(candidates),
+            )
+            try:
+                entry = self._call_json(_PRIMARY_CLAIM_SYSTEM, user)
+            except Exception:
+                return -1
+            self._cache[key] = entry
+            self._mark_dirty()
+        if not isinstance(entry, dict):
+            return -1
+        raw = entry.get("choice", 0)
+        try:
+            choice = int(raw)
+        except (ValueError, TypeError):
+            return -1
+        if choice <= 0 or choice > len(candidates):
+            return -1
+        return choice - 1  # convert to 0-indexed
 
     def find_self_observations(self, text: str) -> list[str]:
         """Return paraphrased self-observations. Cache-first."""

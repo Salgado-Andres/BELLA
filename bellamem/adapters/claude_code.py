@@ -372,9 +372,15 @@ def ingest_session(bella: Bella, path: str, *, tail: int | None = None,
     causes_added = 0
     self_obs_added = 0
     assistant_pending: list[tuple[str, str]] = []
+    # Parallel text of the last assistant turn — threaded into
+    # apply_reaction's stage-2 LLM disambiguator so it can show the
+    # whole turn context when asking the LLM which claim is primary.
+    assistant_pending_text: str = ""
+    llm_cascades = 0   # count how many times stage 2 fired this session
 
     def apply_reaction(pending: list[tuple[str, str]], lr: float,
-                        user_line: int) -> int:
+                        user_line: int,
+                        turn_text: str = "") -> int:
         """Retroactive ratification — targets the *primary* (decision-
         bearing) claim of the preceding assistant turn, not a positional
         default.
@@ -416,30 +422,59 @@ def ingest_session(bella: Bella, path: str, *, tail: int | None = None,
         if not pending:
             return 0
 
-        # Import the scoring regexes lazily to keep this adapter's
+        # Import the scoring helpers lazily to keep this adapter's
         # import graph shallow.
         from .chat import (
             _DECISION_RE, _RULE_RE, _CONTENT_MARKER_RE, _has_real_denial,
+            semantic_decision_score,
         )
 
-        def _decision_score(text: str) -> int:
-            """Load-bearing score for a claim. Higher = more decision-like."""
+        def _regex_decision_score(text: str) -> float:
+            """English-regex decision score. Cheap, deterministic,
+            language-specific. Combined with the semantic score below
+            so strong English signals still win even when the embedder
+            is degenerate (HashEmbedder)."""
             if not text:
-                return 0
-            score = 0
+                return 0.0
+            score = 0.0
             if _DECISION_RE.search(text):
-                score += 3
+                score += 3.0
             if _RULE_RE.search(text):
-                score += 3
+                score += 3.0
             if _has_real_denial(text):
-                score += 3
+                score += 3.0
             if _CONTENT_MARKER_RE.search(text):
-                score += 1
+                score += 1.0
             return score
 
-        # Score every pending claim by its belief text
-        best_idx = len(pending) - 1  # default: positional fallback
-        best_score = -1
+        def _combined_score(b: "Belief") -> float:
+            """Total decision-bearing score: regex + semantic anchors.
+
+            The regex signal is language-specific (English only) and
+            cheap. The semantic signal (cosine to decision anchors) is
+            language-agnostic via multilingual embeddings but costs a
+            few cosines per claim. Summing both gives:
+
+              - English-marked claim with good embedding: wins strongly
+              - English-marked claim with weak/no embedding: still wins
+                on regex (HashEmbedder pytest path)
+              - Non-English decision claim (e.g. French): wins on
+                semantic cosine even though the regex scores 0
+              - Pure exposition claim: both signals near 0, falls back
+                to positional [-1] via tie-break on later claims
+
+            Neither signal alone is sufficient. Regex fails on
+            non-English. Semantic anchors fail on HashEmbedder. The
+            combination is language-agnostic AND degrades gracefully.
+            """
+            regex_score = _regex_decision_score(b.desc)
+            semantic_score = semantic_decision_score(b.embedding)
+            return regex_score + semantic_score
+
+        # ---- Stage 1: regex + anchor scoring on every pending claim
+        # Collect (i, score, belief) so the cascade can compare them
+        # all and decide whether to invoke the LLM disambiguator.
+        scored: list[tuple[int, float, "Belief"]] = []
         for i, (fname, bid) in enumerate(pending):
             g = bella.fields.get(fname)
             if g is None:
@@ -447,12 +482,51 @@ def ingest_session(bella: Bella, path: str, *, tail: int | None = None,
             b = g.beliefs.get(bid)
             if b is None:
                 continue
-            score = _decision_score(b.desc)
-            # Strict > so later claims win ties (degrades to [-1]
-            # behavior when no decision markers are present).
-            if score > best_score:
-                best_score = score
-                best_idx = i
+            scored.append((i, _combined_score(b), b))
+        if not scored:
+            return 0
+
+        # Sort by score desc, tiebreak by later position (matches the
+        # old `pending[-1]` fallback when scores tie at zero).
+        scored.sort(key=lambda t: (-t[1], -t[0]))
+        top_i, top_score, _top_b = scored[0]
+        second_score = scored[1][1] if len(scored) > 1 else 0.0
+        gap = top_score - second_score
+
+        # ---- Stage 2: LLM cascade — only fires when stage 1 is
+        # ambiguous AND llm_ew is available. Three skip conditions
+        # that bypass the LLM entirely:
+        #
+        #   (a) only one candidate — nothing to disambiguate
+        #   (b) clear winner (gap >= 2.0) — stage 1 is decisive
+        #   (c) all clearly zero (top_score < 0.3) — no decision in
+        #       this turn, falling back to pending[-1] is fine
+        #
+        # In the ambiguous middle band, we ask the LLM to pick the
+        # primary claim from the top-K candidates. One LLM call per
+        # ambiguous turn — not per claim — and cached on disk so
+        # re-ingest is free.
+        nonlocal llm_cascades  # type: ignore[name-defined]
+        best_idx = top_i
+        if (
+            llm_ew is not None
+            and len(scored) >= 2
+            and gap < 2.0
+            and top_score >= 0.3
+            and turn_text
+        ):
+            # Send the top 5 (or fewer) candidates to the LLM
+            top_k = scored[: min(5, len(scored))]
+            cand_texts = [b.desc for (_i, _s, b) in top_k]
+            try:
+                llm_choice = llm_ew.pick_primary_claim(
+                    turn_text, cand_texts
+                )
+            except Exception:
+                llm_choice = -1
+            if llm_choice >= 0 and llm_choice < len(top_k):
+                best_idx = top_k[llm_choice][0]
+                llm_cascades += 1
 
         fname, bid = pending[best_idx]
         g = bella.fields.get(fname)
@@ -478,12 +552,19 @@ def ingest_session(bella: Bella, path: str, *, tail: int | None = None,
         if voice == "user" and assistant_pending:
             reaction = classify_reaction(text)
             if reaction == "affirm":
-                affirmed += apply_reaction(assistant_pending, lr=2.2,
-                                            user_line=lineno)
+                affirmed += apply_reaction(
+                    assistant_pending, lr=2.2,
+                    user_line=lineno,
+                    turn_text=assistant_pending_text,
+                )
             elif reaction == "correct":
-                corrected += apply_reaction(assistant_pending, lr=0.4,
-                                            user_line=lineno)
+                corrected += apply_reaction(
+                    assistant_pending, lr=0.4,
+                    user_line=lineno,
+                    turn_text=assistant_pending_text,
+                )
             assistant_pending = []
+            assistant_pending_text = ""
 
         # 2) Regex EW — handles the common cases for both voices.
         new_pending: list[tuple[str, str]] = []
@@ -513,11 +594,15 @@ def ingest_session(bella: Bella, path: str, *, tail: int | None = None,
             # isn't targeting the specific paraphrases the LLM produced.
             claims_written += len(cause_pairs) * 2 + len(obs)
 
-        # 4) Arm pending for the next user turn.
+        # 4) Arm pending for the next user turn. Also remember the
+        # turn's text so apply_reaction's stage-2 LLM cascade can see
+        # the full context, not just the extracted claims.
         if voice == "assistant":
             assistant_pending = new_pending
+            assistant_pending_text = text
         else:
             assistant_pending = []
+            assistant_pending_text = ""
 
     # Flush batched caches — avoids thrashing during ingest AND guarantees
     # the state is on disk when we return (P8 atomic persistence also
