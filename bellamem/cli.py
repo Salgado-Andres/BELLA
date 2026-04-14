@@ -38,7 +38,7 @@ from .core.embed import (
     set_embedder,
 )
 from .core.emerge import emerge
-from .core.expand import expand, expand_before_edit
+from .core.expand import expand, expand_before_edit, ask
 from .core.replay import replay
 from .core.scrub import scrub
 from .core.surprise import compute_surprises, render_surprise_report
@@ -162,6 +162,36 @@ def cmd_expand(args: argparse.Namespace) -> int:
     print(pack.text())
     print()
     print(f"— {len(pack.lines)} lines, ~{pack.used_tokens()}t / {args.budget}t budget —")
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    """Session Q&A retriever — relevance-first pack.
+
+    Complementary to `expand`. Same graph, same scoring primitives,
+    but the bucket priority is inverted: query-relevant beliefs rank
+    first, cross-session invariants land at the bottom as context.
+    Use `ask` for "what did we decide about X?" queries, and `expand`
+    for "what rules apply to this edit?" queries (the edit-guard path).
+
+    See docs/production-correctness-results.md for the motivating
+    dogfood experiment.
+    """
+    _setup_embedder()
+    snap = _resolve_snapshot(args.snapshot)
+    try:
+        bella = load(snap)
+    except EmbedderMismatch as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 3
+    if not bella.fields:
+        print("empty memory — run `bellamem ingest-cc` first", file=sys.stderr)
+        return 1
+    pack = ask(bella, args.focus, budget_tokens=args.budget)
+    print(pack.text())
+    print()
+    print(f"— {len(pack.lines)} lines, ~{pack.used_tokens()}t / {args.budget}t budget "
+          f"(relevance-first) —")
     return 0
 
 
@@ -1126,6 +1156,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-t", "--budget", type=int, default=1200,
                     help="token budget (default 1200)")
     sp.set_defaults(func=cmd_expand)
+
+    sp = sub.add_parser(
+        "ask",
+        help="session Q&A retriever — relevance-first (complementary to expand)",
+    )
+    sp.add_argument("focus", help="the question the user is asking")
+    sp.add_argument("-t", "--budget", type=int, default=1200,
+                    help="token budget (default 1200)")
+    sp.set_defaults(func=cmd_ask)
 
     sp = sub.add_parser("show", help="render the whole forest")
     sp.add_argument("--min-mass", type=float, default=0.0,

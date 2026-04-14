@@ -241,6 +241,135 @@ def expand(bella: "Bella", focus: str, budget_tokens: int = 1200,
 
 
 # ---------------------------------------------------------------------------
+# ask — session Q&A retriever (relevance-first, mass as tiebreak)
+# ---------------------------------------------------------------------------
+#
+# Complementary to `expand`. Same belief graph, same cosine scoring, same
+# mass values, same structural signals — but the bucket priority is
+# inverted so query-relevant beliefs rank first instead of cross-session
+# invariants.
+#
+# Design rationale (see docs/production-correctness-results.md for the
+# measurement that drove this):
+#
+#   expand is optimized for the edit-guard use case: "before you touch
+#   code, surface the cross-cutting rules and ratified decisions." It
+#   pins the mass bucket to the top of every pack. That's correct for
+#   the invariant-retrieval case but wrong for session Q&A where the
+#   user wants a specific decision, not the global rules.
+#
+#   ask is the complementary retriever: "tell me what was said about X."
+#   The relevance bucket is pinned to the top, so cosine + freshness
+#   drive ranking. The mass bucket still exists (30% of budget) and
+#   still surfaces cross-session invariants as context, but they land
+#   BELOW the query-relevant beliefs instead of above.
+#
+# Both modes use the exact same _mass_rank, _relevance_rank, and
+# _disputes_touching helpers. The only differences are the budget
+# partition and the final sort order.
+# ---------------------------------------------------------------------------
+
+# Budget partition for ask. Rationale:
+#   60% relevance — this is a session Q&A query, the user wants the
+#                   answer, so most of the budget goes to query-matching
+#                   beliefs via cosine + freshness
+#   30% mass      — cross-session invariants still worth surfacing as
+#                   context, but smaller share than expand's 60% and
+#                   below the relevance bucket in the final sort
+#   10% dispute   — rejected approaches touching the focus, slightly
+#                   larger than expand's 5% because "did we reject
+#                   something like this?" is a common session Q&A pattern
+ASK_BUDGET_RELEVANCE = 0.60
+ASK_BUDGET_MASS = 0.30
+ASK_BUDGET_DISPUTE = 0.10
+
+
+def ask(bella: "Bella", focus: str, budget_tokens: int = 1200,
+        *, high_mass_floor: float = 0.65) -> Pack:
+    """Build a relevance-first context pack for session Q&A.
+
+    Three layers, identical primitives to `expand` but different budget
+    share and inverted final sort:
+
+      60%  relevance layer (cosine to focus + freshness bonus)
+      30%  high-mass global layer (rules/decisions as context)
+      10%  disputes touching focus
+
+    The final pack is sorted: relevant → dispute → mass. Agents asking
+    "what did we decide about X?" see X-related beliefs first, with
+    global rules and rejected approaches below as context.
+
+    Args:
+        bella: the forest
+        focus: free-text description of the user's question
+        budget_tokens: soft cap on the size of the returned pack
+        high_mass_floor: beliefs with mass ≥ this are candidates for the
+            mass layer (same threshold as expand; invariants are
+            invariants regardless of which mode asks for them)
+    """
+    q_emb = embed(focus) if focus else None
+
+    q_rel = int(budget_tokens * ASK_BUDGET_RELEVANCE)
+    q_mass = int(budget_tokens * ASK_BUDGET_MASS)
+    q_disp = budget_tokens - q_rel - q_mass   # 10%
+
+    pack = Pack(focus=focus, budget_tokens=budget_tokens)
+    seen: set[str] = set()
+
+    def try_add(fname: str, b: Belief, score: float, bucket: str,
+                quota_used: list[int], quota: int) -> bool:
+        if b.id in seen:
+            return False
+        line = PackLine(field_name=fname, belief=b, score=score, bucket=bucket)
+        cost = count_tokens(line.render()) + 1
+        if quota_used[0] + cost > quota:
+            return False
+        pack.lines.append(line)
+        seen.add(b.id)
+        quota_used[0] += cost
+        return True
+
+    # 1) RELEVANCE layer — cosine to focus + freshness bonus. This is
+    # the primary layer for ask; it fills first and gets 60% of the
+    # budget, so the top of the pack reflects what the user asked.
+    rel_used = [0]
+    if q_emb:
+        for fname, b, s in _relevance_rank(bella, q_emb):
+            if s <= 0:
+                break
+            try_add(fname, b, s, "relevant", rel_used, q_rel)
+            if rel_used[0] >= q_rel:
+                break
+
+    # 2) HIGH-MASS global layer — cross-session invariants as context.
+    # Same ranking as expand but smaller budget share and lower sort
+    # priority. These still surface but BELOW query-relevant content.
+    mass_used = [0]
+    for fname, b, m in _mass_rank(bella, q_emb):
+        if m < high_mass_floor:
+            break
+        try_add(fname, b, m, "mass", mass_used, q_mass)
+        if mass_used[0] >= q_mass:
+            break
+
+    # 3) Disputes touching focus — "did we reject something like this?"
+    # Slightly larger share than expand (10% vs 5%) because session
+    # Q&A queries more often probe for prior rejections.
+    disp_used = [0]
+    if q_emb:
+        for fname, b, s in _disputes_touching(bella, q_emb):
+            try_add(fname, b, s, "dispute", disp_used, q_disp)
+            if disp_used[0] >= q_disp:
+                break
+
+    # Inverted sort: relevant → dispute → mass. Query-matching beliefs
+    # rank first; mass invariants land at the bottom as context.
+    bucket_order = {"relevant": 0, "dispute": 1, "mass": 2}
+    pack.lines.sort(key=lambda ln: (bucket_order.get(ln.bucket, 9), -ln.score))
+    return pack
+
+
+# ---------------------------------------------------------------------------
 # expand_before_edit — the bandaid-blocker pack
 # ---------------------------------------------------------------------------
 
