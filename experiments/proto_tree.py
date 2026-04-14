@@ -34,14 +34,19 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 ROOT = Path('/media/im3/plus/labX/bellamem')
-# Scratch/output lives under /tmp via tempfile — ratified rule:
-# "scratch dirs go to /tmp via tempfile, never inside the project tree
-# (durable feedback after the marketing/ near-miss)".
+# Scratch caches live under /tmp via tempfile — ratified rule:
+# "scratch dirs go to /tmp via tempfile, never inside the project tree".
+# The durable graph output is NOT scratch — it's project state and lives
+# at .graph/v02.json for next-session handoff.
 SCRATCH_DIR = Path(tempfile.gettempdir()) / 'bellamem-proto-tree'
-OUTPUT_PATH = SCRATCH_DIR / 'proto-tree.json'
+DURABLE_GRAPH_DIR = ROOT / '.graph'
+OUTPUT_PATH = DURABLE_GRAPH_DIR / 'v02.json'
 LLM_CACHE_PATH = SCRATCH_DIR / 'proto-tree-llm-cache.json'
 EMBED_CACHE_PATH = SCRATCH_DIR / 'proto-tree-embed-cache.json'
 CLAUDE_JSONL_DIR = Path('/home/im3/.claude/projects/-media-im3-plus-labX-bellamem')
+# Snapshot of the current session jsonl — stabilized read (the live jsonl
+# grows as the conversation continues, so we snapshot once before the run).
+FULL_SNAPSHOT_PATH: Optional[Path] = SCRATCH_DIR / 'session-snapshot.jsonl'
 
 LLM_MODEL = 'gpt-4o-mini'
 EMBED_MODEL = 'text-embedding-3-small'
