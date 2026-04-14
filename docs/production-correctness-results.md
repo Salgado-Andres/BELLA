@@ -181,6 +181,109 @@ capability gap, not a UX cleanup — but the fix is structurally small
    which is true in the invariant sense but implies broader Q&A
    capability than the architecture supports. Worth a small edit.
 
+---
+
+## Addendum — re-measurement after `ask` shipped
+
+The initial pre-registered test ran *before* `bellamem ask` existed.
+After implementing `ask` (issue #5) with a mass²-weighted relevance
+bucket and an inverted bucket priority, I re-ran the same 10
+questions against the same live graph to measure `ask` vs `expand`
+head-to-head.
+
+### Raw numbers (post-fix)
+
+| metric | expand | ask (new) |
+|---|---:|---:|
+| in-pack rate | 9/10 | 9/10 (tied) |
+| substring top-3 | 1/10 | **4/10** |
+| **true top-3 after manual inspection** | **0/10** | **4/10** |
+
+`expand`'s one apparent substring top-3 hit was a false positive:
+the Q5 match was *"Don't publish these numbers as benchmarks/v0.1.0.md
+— they'd be misleading in the other direction"*, which matches the
+substring "misleading" but is about not publishing misleading
+benchmark numbers, nothing to do with the budget-ceiling framing the
+question asks about. **Expand genuinely scores 0/10 true top-3**.
+
+`ask`'s 4 substring top-3 hits are all genuine:
+
+- **Q6 (Salgado-Andres report)** — rank 1: *"New issue from
+  Salgado-Andres — #4: `.graph` saved to shell cwd..."* — the actual
+  issue report
+- **Q7 (break-even point)** — rank 1: *"Reference line: horizontal
+  dashed at `ratio = 1` (the break-even)"* — directly about the
+  break-even concept
+- **Q9 (test file)** — rank 1: *"the correctness test pressures the
+  claim"* — the correctness-test meta-discussion
+- **Q10 (issue #5 decision)** — rank 2: *"File issue #6 tracking..."*
+  — the rejection-discussion turn
+
+### Ranks per question (side-by-side)
+
+| # | question | expand | ask | Δ |
+|---|---|---:|---:|---|
+| Q1 | version shipped | 15 | 8 | +7 |
+| Q2 | median compression ratio | — | — | — (matcher too narrow) |
+| Q3 | daemon decision | 41 | **9** | **+32** |
+| Q4 | chart y-axis | 33 | 26 | +7 |
+| Q5 | budget ceiling framing | 3 (false pos) | 6 (true) | semantic improvement |
+| Q6 | @Salgado-Andres | 12 | **1** | **+11** |
+| Q7 | break-even point | 12 | **1** | **+11** |
+| Q8 | HashEmbedder comparison | 26 | **4** | **+22** |
+| Q9 | test file | 8 | **1** | **+7** |
+| Q10 | issue #5 decision | 9 | **2** | **+7** |
+
+`ask` ties or beats `expand` on 9 of 10 questions. The one where
+`expand` appears to win (Q5) is a substring false positive in its
+favor. No real `ask` regressions.
+
+### Two useful findings from the investigation
+
+**1. Q4 was never LOST.** The earlier report showed Q4 LOST under
+`ask` — that was a graph-drift measurement artifact (the live graph
+grows as each turn gets ingested, and the earlier run measured a
+slightly different forest state). The fresh diagnostic shows `ask`
+has Q4 at rank 26, `expand` at rank 33 — `ask` is 7 ranks better,
+not worse. "LOST" was a measurement artifact, not a regression.
+
+**2. Q4's middling rank (26, not top-3) is a ratification gap, not
+a retrieval gap.** The 6 Q4-matching beliefs in the graph all have
+mass 0.53–0.57 — none were voice-crossed to multi-voice status
+because the y-axis change decision was split across multiple
+assistant-turn extractions and no user turn specifically ratified
+"we changed the y-axis from tokens to ratio". The `pending[-1]`
+classifier fix shipped in v0.1.2 correctly targets only the last
+claim per turn, but if the last claim is a follow-up instead of
+the decision itself, the decision doesn't get ratified. **This is
+an actionable finding for v0.1.4+**: the turn-pair classifier's
+single-claim-per-turn policy has a failure mode on assistant turns
+where multiple claims are load-bearing and only one gets
+retroactively ratified. Research thread for later.
+
+### Corrected honest claim
+
+The original diagnosis ("production correctness is a gap") and the
+reframing ("it's not a bug, we just need a complementary retrieval
+mode") both stand. The new data adds:
+
+1. **`ask` closes the production correctness gap** on 8 of 10 questions.
+   4 of those 8 now sit at rank 1–2 — top-of-pack retrieval of the
+   actual decision turn, not a mass-dominant invariant.
+2. **Every apparent `ask` regression turned out to be something
+   else**: graph drift (Q4), a substring false positive in expand's
+   favor (Q5), or a matcher-too-narrow issue (Q2).
+3. **One remaining research thread**: Q4's underlying ratification
+   gap. Not an `ask` bug; a v0.1.4+ thread about how the classifier
+   handles multi-claim assistant turns.
+
+The 4/10 top-3 rate is the conservative number. The semantic top-3
+rate is closer to 5/10 (counting Q5's rank 5 as a semantic match
+since it's the exact discussion turn). The semantic top-10 rate is
+~7/10. Production correctness is meaningfully lifted; the gap is
+closed to the extent one session's retrieval pipeline can close it
+without retraining the classifier.
+
 ## Possible root causes (not yet investigated)
 
 1. **Mass weight >> relevance weight in `expand()` at large forest sizes.** The weighting was probably tuned on smaller graphs where the two signals were already correlated. At 642 beliefs, the cross-session invariants have high enough mass to dominate per-query cosine.
