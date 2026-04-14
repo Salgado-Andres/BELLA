@@ -31,11 +31,34 @@ def main() -> int:
         return _viz_main(rest)
     if cmd == "rebuild-mass":
         return _rebuild_mass_main(rest)
+    if cmd == "audit":
+        return _audit_main(rest)
     print(
-        f"unknown subcommand: {cmd!r} (expected ingest | resume | viz | rebuild-mass)",
+        f"unknown subcommand: {cmd!r} "
+        f"(expected ingest | resume | viz | rebuild-mass | audit)",
         file=sys.stderr,
     )
     return 2
+
+
+def _audit_main(argv: list[str]) -> int:
+    """Print entropy + health signals over .graph/v02.json."""
+    import argparse
+    from pathlib import Path
+    from bellamem.proto.audit import audit, format_audit
+    from bellamem.proto.store import DEFAULT_GRAPH_PATH, load_graph
+
+    parser = argparse.ArgumentParser(prog="bellamem.proto audit")
+    parser.add_argument("--graph", type=Path, default=DEFAULT_GRAPH_PATH)
+    args = parser.parse_args(argv)
+
+    graph = load_graph(args.graph)
+    if not graph.concepts:
+        print(f"graph at {args.graph} is empty", file=sys.stderr)
+        return 1
+    report = audit(graph)
+    print(format_audit(report))
+    return 1 if report.any_hard() else 0
 
 
 def _rebuild_mass_main(argv: list[str]) -> int:

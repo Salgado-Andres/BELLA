@@ -190,6 +190,19 @@ def resume_text(
     out.append(f"  ephemeral_states: {ephemeral_states}")
     out.append(f"  edge_types: {edge_types}")
 
+    # 10. Audit signals — only surface red flags (soft/hard); ok signals
+    # are the common case and would drown the useful ones. `bellamem
+    # audit` shows the full report.
+    from bellamem.proto.audit import audit as _audit
+    report = _audit(graph)
+    flags = report.red_flags()
+    if flags:
+        out.append("")
+        out.append("## audit — red flags")
+        for s in flags:
+            mark = {"soft": "SOFT", "hard": "HARD"}[s.verdict]
+            out.append(f"  [{mark}] {s.name}: {s.note}")
+
     return "\n".join(out)
 
 
