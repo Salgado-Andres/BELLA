@@ -20,6 +20,7 @@ from typing import Optional
 from . import ops
 from .embed import embed, cosine
 from .gene import Gene, Belief, REL_SUPPORT, REL_COUNTER, REL_CAUSE
+from .invariants import apply_scope_classification
 
 
 # Routing thresholds — tune with dogfooding
@@ -161,6 +162,14 @@ class Bella:
         # Maps entity_ref → list of (field_name, belief_id) that mention it.
         # Not persisted — rebuilt lazily on first access after load.
         self._entity_index: dict[str, list[tuple[str, str]]] | None = None
+        # PsiCollapse5A / SIMTraversal additive registries.
+        self.conflicts: dict[str, object] = {}
+        self.conflict_version: int = 0
+        self.traversals: dict[str, object] = {}
+        self.guard_blocks: list[dict] = []
+        self.demoted_conflict_count: int = 0
+        self.last_verification_belief_id: str | None = None
+        self.current_cycle: int = 0
 
     # ----- routing ---------------------------------------------------------
 
@@ -206,6 +215,10 @@ class Bella:
             if result.belief and claim.entity_refs:
                 self._touch_entity_index((fname, result.belief.id),
                                           claim.entity_refs)
+            if result.belief:
+                if claim.extras:
+                    result.belief.content.update(claim.extras)
+                apply_scope_classification(result.belief)
             return result
 
         # Self-observation — R4, reserved field. Core decides routing

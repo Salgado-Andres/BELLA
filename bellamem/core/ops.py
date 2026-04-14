@@ -100,6 +100,10 @@ def merge(g: Gene, survivor_bid: str, absorbed_bid: str) -> OpResult:
     for e in a.entity_refs:
         if e not in s.entity_refs:
             s.entity_refs.append(e)
+    if a.scope == "HISTORICAL_UNIVERSAL":
+        s.scope = "HISTORICAL_UNIVERSAL"
+    if a.source_kind == "TRAVERSAL":
+        s.source_kind = "TRAVERSAL"
     # Combine sources: survivor's existing sources + absorbed's, dedup
     # preserving order, cap to SOURCES_MAX. Two beliefs saying the same
     # thing from the same turn should count once, not twice.
