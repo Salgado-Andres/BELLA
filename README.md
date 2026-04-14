@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/bella-logo.svg" alt="Bella — continuous hypergraph memory for AI agents" width="520"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/bella-logo.svg" alt="Bella — continuous hypergraph memory for AI agents" width="520"/>
 </p>
 
 **~~RAG retrieves documents.~~ Agents need to retrieve beliefs.**
@@ -127,7 +127,7 @@ what* — in far fewer tokens, and across the session boundaries where
 the left column can't go.
 
 <p align="center">
-  <img src="docs/brand/context-collapse.png" alt="The context rot is the real wall of Agentic AI — same history, two futures. Left: six session-history chunks from Claude Code, Codex, Cursor, Windsurf, OpenClaw feed into a faded terminal via /compact and /clear, losing 92—100% of the decisive context (entropy HIGH). Right: the same chunks feed into a luminous belief-graph orb via bella save and restore a crisp terminal via bella resume, losing only 8% (entropy LOW)." width="960"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/context-collapse.png" alt="The context rot is the real wall of Agentic AI — same history, two futures. Left: six session-history chunks from Claude Code, Codex, Cursor, Windsurf, OpenClaw feed into a faded terminal via /compact and /clear, losing 92—100% of the decisive context (entropy HIGH). Right: the same chunks feed into a luminous belief-graph orb via bella save and restore a crisp terminal via bella resume, losing only 8% (entropy LOW)." width="960"/>
 </p>
 
 And the four items on the right are exactly the ones the agent would
@@ -266,7 +266,7 @@ read-only.
 
 ---
 
-## Use with <img src="docs/brand/claude-mark.svg" alt="Claude" width="22" align="center"/> Claude Code
+## Use with <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/claude-mark.svg" alt="Claude" width="22" align="center"/> Claude Code
 
 The flow that lets you keep working past the context window without
 losing the thread is packaged into four slash commands.
@@ -379,7 +379,7 @@ Typed edges (`→` support, `⊥` rejected approach, `⇒` cause) and
 mass-weighted nodes are the structure that flat context can't preserve.
 
 <a href="https://github.com/immartian/bellamem/raw/master/docs/bella-viz3d.webm">
-  <img src="docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph visualization — click to play" width="720"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph visualization — click to play" width="720"/>
 </a>
 
 *Click the image to play the .webm.*
@@ -436,7 +436,7 @@ work — at a fixed `expand` budget of 1500 tokens.
 Visually:
 
 <p align="center">
-  <img src="docs/compression-curve-production.svg" alt="Bella compression ratio across all scenarios. A scatter plot of 19 sessions — 4 synthetic and 15 real Claude Code sessions sampled across 15 different projects — on log-x raw conversation tokens (50 to 200,000) against log-y compression ratio (0.5 to 100). A dashed horizontal line at ratio=1 marks the break-even point. The data climbs monotonically from below 1 at toy scale through 10x at medium scale to 90x at production scale. Synthetic scenarios appear as small gray dots in the lower-left; real Claude Code sessions appear as large colored dots climbing toward the upper-right." width="720"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/compression-curve-production.svg" alt="Bella compression ratio across all scenarios. A scatter plot of 19 sessions — 4 synthetic and 15 real Claude Code sessions sampled across 15 different projects — on log-x raw conversation tokens (50 to 200,000) against log-y compression ratio (0.5 to 100). A dashed horizontal line at ratio=1 marks the break-even point. The data climbs monotonically from below 1 at toy scale through 10x at medium scale to 90x at production scale. Synthetic scenarios appear as small gray dots in the lower-left; real Claude Code sessions appear as large colored dots climbing toward the upper-right." width="720"/>
 </p>
 
 The pattern is unambiguous: **`expand` honors whatever budget the

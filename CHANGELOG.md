@@ -4,6 +4,21 @@ All notable changes will be documented in this file. This project aims
 for [Semantic Versioning](https://semver.org). Until v1.0, everything
 is subject to change.
 
+## [0.2.1] — 2026-04-14 — docs: absolute image URLs for PyPI rendering
+
+PyPI renders the project description from the uploaded wheel and
+cannot resolve relative image paths. 0.2.0's README referenced five
+assets as `docs/brand/...` and `docs/compression-curve-production.svg`,
+which displayed as broken-image placeholders on the PyPI project
+page even though they render fine on GitHub.
+
+Fix: rewrite all five image sources to absolute
+`https://raw.githubusercontent.com/immartian/bellamem/master/...`
+URLs. Pinned to `master` (not a version tag) so future releases
+don't have to update the URLs with each bump.
+
+No code changes.
+
 ## [0.2.0] — 2026-04-14 — v0.2 stable: hot path + dynamics + interactive viz
 
 Promotes the v0.2 schema from alpha to stable after landing concept
