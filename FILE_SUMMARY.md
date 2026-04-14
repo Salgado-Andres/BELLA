@@ -1,0 +1,87 @@
+# BELLA Repository File Summary
+
+Auto-generated high-level description of every tracked file.
+
+- **`.env.example`** — Starts with: `# bellamem configuration — copy to .env and fill in your own values.`
+- **`.gitignore`** — Starts with: `# Secrets — NEVER commit`
+- **`ARCHITECTURE.md`** — Starts with: `# bellamem architecture`
+- **`CHANGELOG.md`** — Starts with: `# Changelog`
+- **`CONTRIBUTING.md`** — Starts with: `# Contributing to bellamem`
+- **`HANDOFF.md`** — Starts with: `# Session Handoff`
+- **`LICENSE`** — Starts with: `GNU AFFERO GENERAL PUBLIC LICENSE`
+- **`README.md`** — Starts with: `<p align="center">`
+- **`THEORY.md`** — Starts with: `# Implementation Notes — How bellamem Realizes BELLA`
+- **`bella/EXAMPLES.md`** — Starts with: `# BELLA in Action — Four Historical Cases`
+- **`bella/MEMORY.md`** — Starts with: `# BELLA as LLM Memory Architecture`
+- **`bella/README.md`** — Starts with: `# BELLA — Bayesian Epistemic Logical Lattice for Accumulation`
+- **`bella/SPEC.md`** — Starts with: `# BELLA — Bayesian Epistemic Logical Lattice for Accumulation`
+- **`bella/VISION.md`** — Starts with: `# BELLA — From Journalism to Consciousness`
+- **`bellamem/__init__.py`** — Starts with: `"""bellamem — local accumulating memory for LLM agents."""`
+- **`bellamem/adapters/__init__.py`** — Starts with: `"""Domain-specific adapters.`
+- **`bellamem/adapters/chat.py`** — Starts with: `"""Rule-based EW for chat messages — voice-aware.`
+- **`bellamem/adapters/claude_code.py`** — Starts with: `"""Claude Code transcript adapter.`
+- **`bellamem/adapters/llm_ew.py`** — Starts with: `"""LLM-backed extraction for the structural cases regex can't handle.`
+- **`bellamem/bench.py`** — Starts with: `"""bellamem bench — empirical comparison of context-pack strategies.`
+- **`bellamem/bench_corpus.py`** — Starts with: `"""Benchmark corpus — hand-written from this dogfood conversation.`
+- **`bellamem/cli.py`** — Starts with: `"""bellamem CLI.`
+- **`bellamem/core/__init__.py`** — Starts with: `"""bellamem.core — pure, domain-agnostic context memory.`
+- **`bellamem/core/audit.py`** — Starts with: `"""bellamem audit — health report for the belief tree.`
+- **`bellamem/core/bella.py`** — Starts with: `"""Bella — the forest coordinator.`
+- **`bellamem/core/decay.py`** — Starts with: `"""Log-odds decay — v0.1.0 forgetting via exponential regress to prior.`
+- **`bellamem/core/embed.py`** — Starts with: `"""Embedder — pluggable, stdlib-only default, optional upgrades.`
+- **`bellamem/core/emerge.py`** — Starts with: `"""R3 emerge — structural self-healing pass.`
+- **`bellamem/core/expand.py`** — Starts with: `"""EXPAND(focus, budget) — the thing that replaces /compact.`
+- **`bellamem/core/gene.py`** — Starts with: `"""Belief tree — the substrate.`
+- **`bellamem/core/ops.py`** — Starts with: `"""The seven operations.`
+- **`bellamem/core/prune.py`** — Starts with: `"""R∅ prune — structural forgetting.`
+- **`bellamem/core/replay.py`** — Starts with: `"""Replay — chronological belief retrieval from source-grounded beliefs.`
+- **`bellamem/core/scrub.py`** — Starts with: `"""Scrub — remove system-noise beliefs from an existing forest.`
+- **`bellamem/core/store.py`** — Starts with: `"""JSON snapshot persistence.`
+- **`bellamem/core/surprise.py`** — Starts with: `"""Surprise — per-belief event scoring from the R1 jump log.`
+- **`bellamem/core/tokens.py`** — Starts with: `"""Token counting — real tokenizers with a stdlib fallback.`
+- **`bellamem/core/visualize.py`** — Starts with: `"""Render a Bella forest to graphviz DOT source.`
+- **`bellamem/guard.py`** — Starts with: `"""bellamem PreToolUse guard — the hot path between Claude Code and the graph.`
+- **`bellamem/paths.py`** — Starts with: `"""Project-local path resolution for bellamem runtime state.`
+- **`bellamem/templates/__init__.py`** — Starts with: `"""Package-data templates for bellamem.`
+- **`bellamem/templates/bellamem.md`** — Starts with: `---`
+- **`benchmarks/README.md`** — Starts with: `# Benchmarks`
+- **`benchmarks/v0.0.2.md`** — Starts with: `# bellamem bench — empirical results`
+- **`benchmarks/v0.0.4rc1.md`** — Starts with: `# bellamem bench — v0.0.4rc1`
+- **`benchmarks/v0.1.0a.md`** — Starts with: `# bellamem bench — v0.1.0a (decay, simulated 30-day Δt)`
+- **`docs/bella-viz3d.webm`** — Binary/media asset (video/webm) used in documentation, branding, or examples.
+- **`docs/bellamem-disputes.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/brand/bella-architecture.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/brand/bella-logo.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8"?>`
+- **`docs/brand/bella-mark.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8"?>`
+- **`docs/brand/bella-viz3d-poster.png`** — Binary/media asset (image/png) used in documentation, branding, or examples.
+- **`docs/brand/claude-mark.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/brand/compression-curve-production.png`** — Binary/media asset (image/png) used in documentation, branding, or examples.
+- **`docs/brand/compression-curve.png`** — Binary/media asset (image/png) used in documentation, branding, or examples.
+- **`docs/brand/context-collapse.png`** — Binary/media asset (image/png) used in documentation, branding, or examples.
+- **`docs/brand/context-collapse.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/brand/flat-vs-graph.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/brand/zimbo-to-agent.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/compression-curve-production.svg`** — Starts with: `<svg viewBox="0 0 720 480" width="720" height="480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelle`
+- **`docs/compression-curve.svg`** — Starts with: `<svg viewBox="0 0 720 480" width="720" height="480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelle`
+- **`docs/example-after.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/example-before.svg`** — Starts with: `<?xml version="1.0" encoding="UTF-8" standalone="no"?>`
+- **`docs/example.graph.emb.bin`** — Binary/media asset (application/octet-stream) used in documentation, branding, or examples.
+- **`docs/example.graph.json`** — Starts with: `{`
+- **`docs/example_session.py`** — Starts with: `"""A worked example — one coding session compressed into a graph.`
+- **`docs/production-correctness-questions.md`** — Starts with: `# Production correctness — ground truth`
+- **`docs/production-correctness-results.md`** — Starts with: `# Production correctness — results`
+- **`docs/scenarios.md`** — Starts with: `# Bella scenarios — entropy reduction, structural preservation, token compression`
+- **`docs/scenarios.py`** — Starts with: `"""Scenario harness — synthetic conversations that demonstrate Bella's`
+- **`pyproject.toml`** — Starts with: `[build-system]`
+- **`scripts/bellamem-dogfood-cron.sh`** — Starts with: `#!/usr/bin/env bash`
+- **`tests/__init__.py`** — Empty marker file used for Python package structure.
+- **`tests/test_composites.py`** — Starts with: `"""Smoke tests for the composite CLI commands: resume, save, install-commands.`
+- **`tests/test_decay.py`** — Starts with: `"""Tests for core/decay.py — log-odds decay math and policy.`
+- **`tests/test_decay_store.py`** — Starts with: `"""Store round-trip tests for decayed_at (v3 → v4 migration).`
+- **`tests/test_example_session.py`** — Starts with: `"""Smoke test for docs/example_session.py.`
+- **`tests/test_ingest_ratification.py`** — Starts with: `"""Regression test for turn-pair retroactive ratification targeting.`
+- **`tests/test_paths.py`** — Starts with: `"""Tests for paths.project_root resolution.`
+- **`tests/test_prune.py`** — Starts with: `"""Tests for core/prune.py — structural forgetting.`
+- **`tests/test_scenarios.py`** — Starts with: `"""Smoke + assertion tests for docs/scenarios.py.`
+- **`tests/test_smoke.py`** — Starts with: `"""Smoke tests — verify the package imports and the public API is callable.`
+- **`tests/test_visualize.py`** — Starts with: `"""Tests for core/visualize.py — Bella → DOT emission.`
