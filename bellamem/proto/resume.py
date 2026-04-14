@@ -24,6 +24,15 @@ from bellamem.proto.graph import Graph
 from bellamem.proto.store import load_graph
 
 
+def _by_mass(concepts):
+    """Sort by mass descending, tie-break by source_ref count so
+    concepts at the uniform initial mass (0.5) still order sanely."""
+    return sorted(
+        concepts,
+        key=lambda c: (-c.mass, -len(c.source_refs)),
+    )
+
+
 def _by_source_ref_count(concepts):
     return sorted(concepts, key=lambda c: -len(c.source_refs))
 
@@ -79,33 +88,33 @@ def resume_text(
     out.append("")
 
     # 1. Invariant × metaphysical — what the system IS
-    invar_meta = _by_source_ref_count([
+    invar_meta = _by_mass([
         c for c in graph.concepts.values()
         if c.class_ == "invariant" and c.nature == "metaphysical"
     ])
     out.append(f"## what the system IS — invariant × metaphysical ({len(invar_meta)})")
     for c in invar_meta[:top_invariant_meta]:
-        out.append(f"  [{len(c.source_refs):2}r] {c.topic}")
+        out.append(f"  m={c.mass:.2f} [{len(c.source_refs):2}r] {c.topic}")
     out.append("")
 
     # 2. Invariant × normative — what we commit to
-    invar_norm = _by_source_ref_count([
+    invar_norm = _by_mass([
         c for c in graph.concepts.values()
         if c.class_ == "invariant" and c.nature == "normative"
     ])
     out.append(f"## what we commit to — invariant × normative ({len(invar_norm)})")
     for c in invar_norm[:top_invariant_norm]:
-        out.append(f"  [{len(c.source_refs):2}r] {c.topic}")
+        out.append(f"  m={c.mass:.2f} [{len(c.source_refs):2}r] {c.topic}")
     out.append("")
 
     # 3. Invariant × factual — structural facts
-    invar_fact = _by_source_ref_count([
+    invar_fact = _by_mass([
         c for c in graph.concepts.values()
         if c.class_ == "invariant" and c.nature == "factual"
     ])
     out.append(f"## structural facts — invariant × factual ({len(invar_fact)})")
     for c in invar_fact[:top_invariant_fact]:
-        out.append(f"  [{len(c.source_refs):2}r] {c.topic}")
+        out.append(f"  m={c.mass:.2f} [{len(c.source_refs):2}r] {c.topic}")
     out.append("")
 
     # 4. Open ephemerals — work in progress

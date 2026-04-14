@@ -109,8 +109,16 @@ def _load_v02(path: str) -> Optional[dict]:
 # Pack builder — v0.2-native typed summary
 # ---------------------------------------------------------------------------
 
-def _by_refs_desc(items: list[dict]) -> list[dict]:
-    return sorted(items, key=lambda c: -len(c.get("source_refs") or []))
+def _by_mass_desc(items: list[dict]) -> list[dict]:
+    """Sort concept dicts by mass descending, tie-breaking on
+    source_ref count so uniform-mass concepts still order sanely."""
+    return sorted(
+        items,
+        key=lambda c: (
+            -float(c.get("mass", 0.5)),
+            -len(c.get("source_refs") or []),
+        ),
+    )
 
 
 def _build_pack(data: dict) -> str:
@@ -122,6 +130,10 @@ def _build_pack(data: dict) -> str:
       - open ephemerals (work in progress)
       - retracted approaches (rejected)
       - dispute edges (contradictions)
+
+    Invariants are sorted by mass (BELLA R1 accumulated log-odds)
+    so the concepts that real voices have actually ratified rise
+    above single-voice one-shots.
     """
     concepts: dict = data.get("concepts") or {}
     edges: list = data.get("edges") or []
@@ -129,7 +141,7 @@ def _build_pack(data: dict) -> str:
     lines: list[str] = []
 
     # ----- invariant × metaphysical -----
-    invar_meta = _by_refs_desc([
+    invar_meta = _by_mass_desc([
         c for c in concepts.values()
         if c.get("class") == "invariant" and c.get("nature") == "metaphysical"
     ])
@@ -137,11 +149,12 @@ def _build_pack(data: dict) -> str:
         lines.append("## what the system IS (invariant × metaphysical)")
         for c in invar_meta[:_MAX_INVARIANT_META]:
             refs = len(c.get("source_refs") or [])
-            lines.append(f"  [{refs:2}r] {c.get('topic', '')}")
+            mass = float(c.get("mass", 0.5))
+            lines.append(f"  m={mass:.2f} [{refs:2}r] {c.get('topic', '')}")
         lines.append("")
 
     # ----- invariant × normative -----
-    invar_norm = _by_refs_desc([
+    invar_norm = _by_mass_desc([
         c for c in concepts.values()
         if c.get("class") == "invariant" and c.get("nature") == "normative"
     ])
@@ -149,7 +162,8 @@ def _build_pack(data: dict) -> str:
         lines.append("## what we commit to (invariant × normative)")
         for c in invar_norm[:_MAX_INVARIANT_NORM]:
             refs = len(c.get("source_refs") or [])
-            lines.append(f"  [{refs:2}r] {c.get('topic', '')}")
+            mass = float(c.get("mass", 0.5))
+            lines.append(f"  m={mass:.2f} [{refs:2}r] {c.get('topic', '')}")
         lines.append("")
 
     # ----- open ephemerals (recent work) -----

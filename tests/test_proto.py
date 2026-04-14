@@ -114,6 +114,60 @@ def test_add_concept_indices_update():
     assert "alpha" in g.by_class["invariant"]
     assert "alpha" in g.by_nature["metaphysical"]
 
+def test_cite_without_speaker_updates_refs_only():
+    """Back-compat: cite() without speaker still updates source_refs
+    and does NOT touch mass or voices. Older code paths that don't
+    know the speaker must keep working."""
+    c = Concept(id="x", topic="x", class_="decision", nature="normative",
+                embedding=np.zeros(8, dtype=np.float32))
+    c.cite("s#0")
+    assert c.source_refs == ["s#0"]
+    assert c.voices == []
+    assert c.mass == 0.5
+
+def test_cite_with_new_speaker_raises_mass():
+    """First citation from a speaker bumps mass via log-odds."""
+    c = Concept(id="x", topic="x", class_="decision", nature="normative",
+                embedding=np.zeros(8, dtype=np.float32))
+    c.cite("s#0", "user")
+    assert c.voices == ["user"]
+    assert c.mass > 0.5            # moved
+    assert c.mass < 1.0            # didn't saturate
+    first_mass = c.mass
+
+    # Second speaker ratifies → new voice, bigger bump
+    c.cite("s#1", "assistant")
+    assert c.voices == ["user", "assistant"]
+    assert c.mass > first_mass
+
+def test_cite_same_speaker_twice_smaller_bump():
+    """Repeat voice is weaker evidence than a new voice."""
+    c1 = Concept(id="a", topic="a", class_="decision", nature="normative",
+                 embedding=np.zeros(8, dtype=np.float32))
+    c1.cite("s#0", "user")
+    c1.cite("s#1", "user")  # same speaker twice
+    same_speaker_mass = c1.mass
+
+    c2 = Concept(id="b", topic="b", class_="decision", nature="normative",
+                 embedding=np.zeros(8, dtype=np.float32))
+    c2.cite("s#0", "user")
+    c2.cite("s#1", "assistant")  # different speakers
+    two_speakers_mass = c2.mass
+
+    assert two_speakers_mass > same_speaker_mass
+
+def test_cite_dedups_source_ref_even_without_speaker():
+    c = Concept(id="x", topic="x", class_="decision", nature="normative",
+                embedding=np.zeros(8, dtype=np.float32))
+    c.cite("s#0", "user")
+    m1 = c.mass
+    c.cite("s#0", "assistant")  # same source_id, even with new speaker
+    # source_id already seen → full no-op, mass unchanged
+    assert c.source_refs == ["s#0"]
+    assert c.voices == ["user"]
+    assert c.mass == m1
+
+
 def test_add_edge_accumulates_voices():
     g = Graph()
     g.add_concept(_mk_concept("target"))

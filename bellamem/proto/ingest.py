@@ -182,7 +182,7 @@ def apply_classification(
         if not cid or cid not in graph.concepts:
             continue
         c = graph.concepts[cid]
-        c.cite(turn.id)
+        c.cite(turn.id, turn.speaker)
         edge_type = cite.get("edge") or cite.get("edge_type", "support")
         try:
             e = Edge(
@@ -225,7 +225,7 @@ def apply_classification(
         topic_emb = embedder.embed(topic)
         existing = graph.find_similar_concept(topic, topic_emb)
         if existing is not None:
-            existing.cite(turn.id)
+            existing.cite(turn.id, turn.speaker)
             # Optional: could upgrade class/nature if new classification is
             # stronger, but that's a judgment call — defer for now.
             continue
@@ -234,17 +234,20 @@ def apply_classification(
         if cid in graph.concepts:
             cid = f"{cid}-{len(graph.concepts)}"
         try:
+            # Create with empty source_refs + voices, then call cite()
+            # so the R1 mass-accumulate path runs for the first citation
+            # too. Otherwise new concepts would start at mass=0.5 with
+            # empty voices, and the first citation's mass bump would
+            # only apply to the second speaker.
             new_concept = Concept(
                 id=cid,
                 topic=topic,
                 class_=class_,
                 nature=nature,
                 parent=parent,
-                source_refs=[turn.id],
-                first_voiced_at=turn.id,
-                last_touched_at=turn.id,
                 embedding=topic_emb,
             )
+            new_concept.cite(turn.id, turn.speaker)
         except ValueError:
             continue
         graph.add_concept(new_concept)

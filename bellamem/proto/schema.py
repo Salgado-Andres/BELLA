@@ -13,11 +13,38 @@ Design lives in memory/project_graph_v02_schema.md. Short version:
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 import numpy as np
+
+
+# ---------------------------------------------------------------------------
+# Jaynes / logit mass helpers — R1 accumulate for concepts
+# ---------------------------------------------------------------------------
+
+def _logit(p: float) -> float:
+    """mass ∈ (0,1) → log-odds ∈ (-∞, ∞). Clamps to avoid infinity."""
+    p = min(max(p, 1e-6), 1 - 1e-6)
+    return math.log(p / (1 - p))
+
+
+def _sigmoid(x: float) -> float:
+    """log-odds → mass ∈ (0, 1). Clamps to avoid overflow."""
+    if x > 30:
+        return 1.0 - 1e-6
+    if x < -30:
+        return 1e-6
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+# Mass update deltas. New voice = strong evidence (different speaker
+# ratifies the concept). Repeat voice = weak evidence (same speaker
+# cites multiple times).
+_MASS_DELTA_NEW_VOICE = 0.5     # ~1 step from 0.5 → 0.62
+_MASS_DELTA_REPEAT_VOICE = 0.1  # tiny bump for repetition
 
 
 ConceptClass = Literal["invariant", "decision", "observation", "ephemeral"]
@@ -98,6 +125,14 @@ class Concept:
     `id` is derived from a canonical slug of the topic — stable
     across runs, which gives cross-session concept identity without
     a UUID generator.
+
+    **Mass** updates via BELLA R1 accumulate on each citation: a new
+    voice (speaker not previously seen for this concept) bumps
+    log-odds by _MASS_DELTA_NEW_VOICE; a repeat voice by the smaller
+    _MASS_DELTA_REPEAT_VOICE. Mass starts at 0.5 (log-odds 0) and
+    saturates toward 1.0 via sigmoid. Retractions can lower mass via
+    negative deltas on the owning edge's endpoint (R5 convergence —
+    deferred).
     """
     id: str
     topic: str
@@ -107,6 +142,7 @@ class Concept:
     state: Optional[ConceptState] = None
     mass: float = 0.5
     mass_floor: float = 0.0
+    voices: list[str] = field(default_factory=list)
     source_refs: list[str] = field(default_factory=list)
     first_voiced_at: Optional[str] = None
     last_touched_at: Optional[str] = None
@@ -126,15 +162,37 @@ class Concept:
         if self.class_ == "ephemeral" and self.state is None:
             object.__setattr__(self, "state", "open")
 
-    def cite(self, source_id: str) -> None:
-        """Add a source citation if not already present. Updates
-        first_voiced_at and last_touched_at."""
+    def cite(self, source_id: str, speaker: str = "") -> None:
+        """Add a source citation and accumulate mass via R1.
+
+        A citation does three things:
+          1. Append the source_id (if not already present).
+          2. Update first_voiced_at and last_touched_at.
+          3. Bump mass via log-odds: stronger for a new speaker
+             (ratification), weaker for repeat speakers (emphasis).
+
+        Speaker is optional — when unknown, citations still update
+        source_refs but don't move mass. This lets older code paths
+        keep working without requiring a speaker at every call site.
+        """
         if source_id in self.source_refs:
             return
         self.source_refs.append(source_id)
         if self.first_voiced_at is None:
             self.first_voiced_at = source_id
         self.last_touched_at = source_id
+
+        if not speaker:
+            return
+
+        new_voice = speaker not in self.voices
+        if new_voice:
+            self.voices.append(speaker)
+            delta = _MASS_DELTA_NEW_VOICE
+        else:
+            delta = _MASS_DELTA_REPEAT_VOICE
+        new_log_odds = _logit(self.mass) + delta
+        self.mass = _sigmoid(new_log_odds)
 
     def to_json(self) -> dict:
         return {
@@ -146,6 +204,7 @@ class Concept:
             "state": self.state,
             "mass": self.mass,
             "mass_floor": self.mass_floor,
+            "voices": list(self.voices),
             "source_refs": list(self.source_refs),
             "first_voiced_at": self.first_voiced_at,
             "last_touched_at": self.last_touched_at,
@@ -162,6 +221,7 @@ class Concept:
             state=data.get("state"),
             mass=data.get("mass", 0.5),
             mass_floor=data.get("mass_floor", 0.0),
+            voices=list(data.get("voices", [])),
             source_refs=list(data.get("source_refs", [])),
             first_voiced_at=data.get("first_voiced_at"),
             last_touched_at=data.get("last_touched_at"),
