@@ -82,4 +82,4 @@ bellamem-guard = "bellamem.guard:main"
 include = ["bellamem*"]
 
 [tool.setuptools.package-data]
-bellamem = ["templates/*.md", "viz/*.html"]
+bellamem = ["templates/*.md", "viz/*.html", "proto/*.html", "proto/*.md"]

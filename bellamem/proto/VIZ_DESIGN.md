@@ -628,3 +628,111 @@ produces a readable static diagram of the filtered graph.
 
 Nothing remains on the dependency list. When implementation
 starts, it can begin at Phase A directly.
+
+---
+
+## Addendum — what actually shipped (2D, April 2026)
+
+The 2D path landed ahead of Phase A (3D UMAP) because the SVG
+graphviz path turned out to be the wrong shape — a stack of
+class×nature cluster boxes is a flowchart, not a concept map.
+What ships instead is an **interactive hypergraph concept map**
+in `bellamem/proto/viz_html.py` with two renderers (D3 v7
+force-directed and Cytoscape + fcose). The graphviz static SVG
+path stays in `viz_2d.py` for docs-embedding use cases.
+
+### Data model shift — source_refs is the ground truth
+
+The original plan treated `graph.edges` as the source of truth
+for "which turns touch which concepts." That missed ~33% of the
+citation signal because `concept.source_refs` captures every
+citation while `graph.edges` only materializes a subset as
+typed Edge objects (support/dispute/cause/elaborate +
+voice-cross/consume-*/retract). For a session with 600+
+concepts and 1280+ source_refs but only 670 edges, iterating
+`concept.source_refs` catches 554 turns vs 373 from edges.
+
+`build_payload` now builds turn hubs from `source_refs` and
+overlays the typed edge metadata where a real Edge exists,
+falling back to a generic `support` spoke otherwise.
+
+### Visual vocabulary — shape × color × size, not "cards"
+
+| axis | encoding |
+|---|---|
+| shape | class: invariant=hexagon, decision=diamond, observation=ellipse, ephemeral=round-rect |
+| fill color | nature: metaphysical=amber, normative=blue, factual=green |
+| node size | mass, mapped m∈[0.5, 0.75] → r∈[10, 39] for a visible ~4× range |
+| border | ephemeral state — solid=open, green=consumed, dashed-red=retracted, 35% opacity=stale |
+| label | topic rendered **outside** the shape (below), not inside a card |
+| turn-hub | small grey circle, no label, becomes a visible rosette of its cited concepts |
+| edge label | type word on structural cc-edges only (too noisy on hyperedges) |
+
+Shape-for-class + color-for-nature makes the two axes orthogonal
+and readable at a glance. Size for mass shows the weighted graph
+shape immediately — ratified invariants dominate visually, while
+low-mass floor concepts recede.
+
+### Hypergraph rendering — hub-and-spoke
+
+A turn that cites ≥N distinct concepts (default N=3) becomes a
+small grey hub node. Each cited concept gets a thin spoke to the
+hub. This makes the hypergraph structurally visible: one hub =
+one hyperedge, and you can see at a glance which concepts were
+co-discussed in the same turn.
+
+Low-mass concepts that are only reachable via a hub spoke are
+pulled back in as **ghost nodes** so hubs always render as
+complete rosettes instead of dangling. This is the structural
+equivalent of `expand_edge_partners` for cc-edges.
+
+### Force-directed layout, not hierarchical
+
+The Three.js 3D plan used UMAP×depth×mass for a principled
+embedding. The 2D path uses **force-directed** physics
+(d3-force or Cytoscape fcose) because:
+
+1. No embedding dependency — UMAP would require either
+   re-embedding 600+ topics or persisting `.embedding`
+   arrays into `.graph/v02.json`, neither of which is
+   worth the cost for a 2D static view.
+2. Interactive drag — D3 lets you grab a node and pull it,
+   which is genuinely useful for untangling dense knots.
+3. Matches herenews inquiry graph shape — the reference
+   visualization the user pointed at when the graphviz
+   stack-of-clusters version was rejected.
+
+Tuned D3 forces: link distance 55 structural / 28 hyperedge,
+charge -110 concept / -30 turn capped at 360px, inward gravity
+forceX/forceY at 0.05, collide r+4 at 0.9 strength. These keep
+the rosettes tight without collapsing or dispersing.
+
+### CLI surface — what's live
+
+```bash
+python -m bellamem.proto viz                            # .graph/v02.html (d3)
+python -m bellamem.proto viz --renderer cytoscape       # Cytoscape + fcose
+python -m bellamem.proto viz --out g.svg                # static graphviz SVG
+python -m bellamem.proto viz --min-mass 0.5             # wider mass cut
+python -m bellamem.proto viz --min-turn-degree 2        # denser hub pass
+python -m bellamem.proto viz --no-hubs                  # concept-only view
+python -m bellamem.proto viz --class invariant          # filter by class
+python -m bellamem.proto viz --session 853e838e         # filter by session
+```
+
+All renderers read the shared `viz.build_payload` filtered
+payload, so filters apply uniformly across HTML/SVG/DOT.
+
+### What's deferred to later
+
+- **Temporal replay** (Phase B in the original spec). Needs
+  `source.timestamp` threading through the template. Not a
+  blocker — can land as a follow-up commit.
+- **3D Three.js port** (Phase A). The 2D concept map covers
+  the "look at my graph" use case; 3D adds camera + replay +
+  ephemeral state animation but is a strictly bigger build.
+  Deferred until someone actually needs it.
+- **Topic-label mass threshold** — currently all labels render
+  and rely on the hub toggle. Mass-gated labels (only m>0.65
+  gets a label) would clean up dense areas but needs
+  calibration.
