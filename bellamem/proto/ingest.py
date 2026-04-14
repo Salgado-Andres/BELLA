@@ -10,6 +10,7 @@ dogfooding against a session snapshot.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -323,8 +324,23 @@ def ingest_session(
 # CLI entry point (for `python -m bellamem.proto.ingest SNAPSHOT_PATH`)
 # ---------------------------------------------------------------------------
 
+def _load_env_file(env_path: Path) -> None:
+    """Minimal .env loader for `python -m` invocation where the shell
+    env may not carry OPENAI_API_KEY etc. Does not overwrite existing
+    env vars — shell env takes precedence."""
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
 def main() -> int:
     import tempfile
+    _load_env_file(Path.cwd() / ".env")
     SCRATCH = Path(tempfile.gettempdir()) / "bellamem-proto-tree"
     SCRATCH.mkdir(parents=True, exist_ok=True)
 
