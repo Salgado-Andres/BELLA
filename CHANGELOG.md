@@ -4,6 +4,234 @@ All notable changes will be documented in this file. This project aims
 for [Semantic Versioning](https://semver.org). Until v1.0, everything
 is subject to change.
 
+## [0.2.3] — 2026-04-14 — 3D viz port to v0.2
+
+Closes Phase A of the VIZ_DESIGN spec — the Three.js 3D visualization
+now reads the v0.2 graph natively instead of the flat v0.1 schema.
+The legacy `bellamem/viz/render3d.py` stays in-tree as-is; the v0.2
+port lives in `bellamem/proto/viz_3d.py` alongside the 2D renderers.
+
+### New
+
+- **`python -m bellamem.proto viz --renderer 3d`** — third renderer
+  option alongside `d3` and `cytoscape`. Outputs a self-contained
+  Three.js HTML file with:
+  - UMAP × topic-embedding for X/Z clustering (semantically near
+    concepts land near each other in the scene)
+  - Mass for Y (ratified content rises above the floor plane)
+  - Class-per-shape: invariant=icosahedron, decision=tetrahedron,
+    observation=sphere, ephemeral=cube
+  - Nature-per-color: metaphysical=amber, normative=blue, factual=green
+  - Turn hubs placed at the centroid of their spoke concepts (hub
+    sits ~1.5 units below the concept cloud)
+  - Hover tooltips, click-to-sidebar, orbit camera, reset view,
+    toggle hubs/edges
+
+- **`bellamem/proto/viz_3d.py`** — new data-layer module that
+  reuses `viz.build_payload` for filter+hub work and extends the
+  payload dict with per-concept `pos_3d` triples. Re-embeds topic
+  text at render time using the existing `Embedder` cache; first
+  render against a fresh graph costs ~$0.01 of OpenAI calls for
+  400+ concepts, subsequent renders are instant.
+
+- **`bellamem/proto/viz_template_3d.html`** — new Three.js scene
+  template. Self-contained, imports Three.js r160 from CDN.
+  4 new tests in `tests/test_proto_viz_3d.py` covering position
+  assignment, Y-mass correspondence, turn-hub centroid placement,
+  and end-to-end HTML payload inlining.
+
+### Notes
+
+- Requires the `[viz3d]` extra (`umap-learn>=0.5`, already declared
+  in pyproject). Clean error message if missing.
+- Temporal replay (Phase B) and session filtering are still
+  deferred. The current 3D view is a static typed-structural
+  snapshot, same as the 2D renderers.
+
+## [0.2.2] — 2026-04-14 — graph-health pass: rebuild-mass, prompt v2, audit layer
+
+A graph-quality session after 0.2.1 — three structural fixes landed
+together. Motivation: a diagnostic scan showed 85% of concepts stuck
+at the m=0.5 mass floor, 97% of edges turn-to-concept instead of
+concept-to-concept, and an LLM extractor that split single ideas
+into five sub-attribute concepts. The graph read as a transcript
+with tags, not a concept map.
+
+### New
+
+- **`python -m bellamem.proto rebuild-mass`** — one-shot R1 repair
+  pass. Replays each concept's stored `source_refs` through `cite()`
+  to recompute `mass` and `voices`. Used to fix graphs built by the
+  legacy `experiments/proto_tree.py` path which bypassed `cite()`
+  entirely (its own ProtoGraph dataclass had no voices/mass at all).
+  On the live graph: 531/627 frozen concepts → 0, top mass 0.769 → 0.881.
+  `--dry-run` flag for preview-without-save.
+
+- **`python -m bellamem.proto audit`** — entropy + health signals
+  over the current graph. Five metrics with ok/soft/hard verdicts:
+  `concept_density`, `structural_edge_ratio`, `mass_floor_fraction`,
+  `mass_spread` (bucket-entropy of mass distribution), and
+  `orphan_refs`. Exits 1 on any hard flag. The `bellamem resume`
+  footer now surfaces red flags inline so structural problems are
+  visible in every resume, not just on explicit audit.
+
+- **Prompt v2** for `TurnClassifier` (cache-busted from v1). Three
+  targeted changes:
+  - **ONE CONCEPT PER IDEA** rule with an explicit bad/good example
+    taken from live data — the classifier was splitting "concept
+    map visual vocabulary" into five parallel sub-attribute concepts.
+  - `concept_edges` promoted to a first-class output with examples
+    of when to use `cause` / `elaborate` / `dispute`. Previously it
+    was a one-liner at the bottom.
+  - "Don't default to support" rule. Support was 436/691 edges in
+    the live graph; it's the weakest cc-edge signal and should be
+    the fallback, not the default.
+
+### Changed
+
+- `DEDUP_COSINE` lowered from 0.85 to 0.78 for tighter near-variant
+  merging at ingest time in `find_similar_concept()`.
+
+### Fixed
+
+- Mock embedder in `tests/test_proto.py` now produces zero-centered
+  32-dim vectors (was uint8-based 8-dim, all-positive). The lower
+  `DEDUP_COSINE` hit the old embedder's ~0.75 cosine noise floor
+  and false-merged unrelated topics in one test.
+
+### Added tests
+
+- `tests/test_proto_audit.py` — 14 tests covering each audit signal
+  and the aggregate AuditReport flag behavior
+- 2 tests in `tests/test_proto.py` for `rebuild_mass_from_source_refs`
+
+48 proto tests total, all passing.
+
+### Deliberately NOT included
+
+- Retroactive near-duplicate merge pass via hand-maintained stopword
+  jaccard — violated the no-ad-hoc-stoplists rule. The real fix for
+  concept explosion lives in the extractor prompt (above).
+- Baseline-diff surprise signals ("what moved since last session").
+  Needs session-boundary tracking and a persisted snapshot. Deferred.
+
+## [0.2.1] — 2026-04-14 — docs: absolute image URLs for PyPI rendering
+
+PyPI renders the project description from the uploaded wheel and
+cannot resolve relative image paths. 0.2.0's README referenced five
+assets as `docs/brand/...` and `docs/compression-curve-production.svg`,
+which displayed as broken-image placeholders on the PyPI project
+page even though they render fine on GitHub.
+
+Fix: rewrite all five image sources to absolute
+`https://raw.githubusercontent.com/immartian/bellamem/master/...`
+URLs. Pinned to `master` (not a version tag) so future releases
+don't have to update the URLs with each bump.
+
+No code changes.
+
+## [0.2.0] — 2026-04-14 — v0.2 stable: hot path + dynamics + interactive viz
+
+Promotes the v0.2 schema from alpha to stable after landing concept
+mass dynamics (R1), pattern emergence (R3), stale-state transition
+(R5), source-grounded timestamps, and an interactive hypergraph
+concept-map visualization in the browser.
+
+### What's new since a1
+
+- **BELLA R1 — concept mass via Jaynes accumulate.** New voice on a
+  concept bumps log-odds by a large delta; repeat voice by a small
+  one. Mass saturates at 1.0 via sigmoid, giving ratified content
+  a 4× visible lead over single-voice floor concepts.
+- **BELLA R3 — pattern emergence.** Recurring multi-source patterns
+  rise without hand-labeling.
+- **BELLA R5 — stale-state sweep.** `sweep_stale_ephemerals` flips
+  open ephemerals to `stale` after max-age with no re-voice,
+  unrooting abandoned plans from the open-work list.
+- **Source.timestamp** from jsonl contents — wall-clock is now
+  available for replay and the R5 age check.
+- **Interactive hypergraph concept-map viz** (`bellamem.proto viz`).
+  Two renderers — D3 v7 force-directed (draggable nodes) and
+  Cytoscape.js + fcose (auto-settling) — plus a static graphviz
+  SVG path for docs-embedding. Visual vocabulary: shape encodes
+  class (hexagon / diamond / ellipse / round-rect), fill color
+  encodes nature (amber / blue / green), node radius encodes mass,
+  border style encodes ephemeral state. Turn hubs materialize the
+  hypergraph: any turn that cites ≥N concepts becomes a visible
+  rosette linking its cited concepts. Turn-hub ground truth comes
+  from `concept.source_refs` (1280+ citations) not `graph.edges`
+  (670 typed Edges), closing a 33% coverage gap that would have
+  left high-mass concepts looking orphaned.
+- **Release hygiene**: `openai` + `numpy` moved from optional
+  extras to core deps for clean install.
+
+## [0.2.0a1] — 2026-04-14 — v0.2 hot path: tree+cross-edges, class×nature, dogfooded
+
+First alpha of the v0.2 graph schema. The flat belief field from v0.1
+is replaced with a tree of typed concepts over first-class edges,
+source-grounded citations back to session jsonls, and per-turn LLM
+ingestion via a cheap cached classifier. Clean break — no migration
+from the v0.1 flat graph. Legacy `.graph/default.json` is untouched
+but unused by the new hot path.
+
+### What's new
+
+- **`bellamem.proto` module** — five files (schema, graph, store,
+  clients, ingest) + resume + dispatcher. Concepts are classified on
+  two orthogonal axes: **class** (invariant / decision / observation /
+  ephemeral) and **nature** (factual / normative / metaphysical).
+  Ephemerals have a state machine (open / consumed / retracted /
+  stale). Edges are first-class with their own voices, confidence,
+  and established_at provenance.
+- **`bellamem resume`** now prints a v0.2-native typed structural
+  summary (invariant×metaphysical, invariant×normative, open
+  ephemerals, retracted approaches, dispute edges) instead of the
+  flat replay/expand/surprises composite.
+- **`bellamem save`** now incrementally ingests the latest Claude
+  Code session jsonl into `.graph/v02.json` via
+  `bellamem.proto.ingest_session`. Already-ingested turns skip via
+  `turn.id in graph.sources`, so re-runs are cheap.
+- **`bellamem-guard` hook** rewritten v0.2-native. Reads
+  `.graph/v02.json` directly, advisory sections match the resume
+  layout, blocking check fires on retracted ephemeral topics or
+  dispute-edge target concepts (2-source-ref minimum).
+- **`bellamem-dogfood-cron.sh`** rewired to call `python -m
+  bellamem.proto ingest LATEST_JSONL`. Incremental by design.
+- **Retraction detection groundwork** (`classify_retraction` +
+  `LLMExtractor.pick_retraction`) — LLM-delegated, no lexical
+  fallback, 13 passing spec tests. Not wired into ingest yet.
+- **`bellamem/proto/RULES.md`** — BELLA R1–R6 mapping to v0.2.
+
+### Fixed
+
+- **Cache-poisoning bug in `proto.TurnClassifier`.** Error-fallback
+  responses were being cached and silently masqueraded as real
+  classifications on re-run. Fix: don't cache error responses.
+- **Bench corpus cleanup.** Q01/Q10/Q13/Q14 removed — scope
+  mismatch, answers live in docs/source not conversations.
+
+### What's NOT migrated yet
+
+Most non-hot-path CLI commands still read the flat graph: expand,
+ask, before-edit, entities, bench, audit, emerge, replay,
+surprises, scrub, why, prune, decay, render. Each migrates as
+touched.
+
+### Dogfood
+
+Ran against the full 637-turn session where v0.2 was designed and
+built. Produced 437 concepts, 524 edges, 62 invariant×metaphysical
+concepts capturing the session's architectural arc by name.
+Runtime ~30 min cold cache (~$0.20), free on re-run.
+
+### Breaking
+
+- `bellamem resume` no longer prints replay/expand/surprises — use
+  `bellamem.proto.load_graph()` for parseable output.
+- `bellamem save` no longer prints audit/surprises sections.
+- `bellamem show` groups by class × nature instead of flat tree.
+- `bellamem stats` reports v0.2 counts (sources/concepts/edges).
+
 ## [0.1.2] — 2026-04-13 — second user-reported fix, classifier rot fixes, scenarios harness
 
 The second patch cycle. Ships another user-reported fix from

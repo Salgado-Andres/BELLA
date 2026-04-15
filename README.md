@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/bella-logo.svg" alt="Bella — continuous hypergraph memory for AI agents" width="520"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/bella-logo.svg" alt="Bella — continuous hypergraph memory for AI agents" width="520"/>
 </p>
 
 **~~RAG retrieves documents.~~ Agents need to retrieve beliefs.**
@@ -127,7 +127,7 @@ what* — in far fewer tokens, and across the session boundaries where
 the left column can't go.
 
 <p align="center">
-  <img src="docs/brand/context-collapse.png" alt="The context rot is the real wall of Agentic AI — same history, two futures. Left: six session-history chunks from Claude Code, Codex, Cursor, Windsurf, OpenClaw feed into a faded terminal via /compact and /clear, losing 92—100% of the decisive context (entropy HIGH). Right: the same chunks feed into a luminous belief-graph orb via bella save and restore a crisp terminal via bella resume, losing only 8% (entropy LOW)." width="960"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/context-collapse.png" alt="The context rot is the real wall of Agentic AI — same history, two futures. Left: six session-history chunks from Claude Code, Codex, Cursor, Windsurf, OpenClaw feed into a faded terminal via /compact and /clear, losing 92—100% of the decisive context (entropy HIGH). Right: the same chunks feed into a luminous belief-graph orb via bella save and restore a crisp terminal via bella resume, losing only 8% (entropy LOW)." width="960"/>
 </p>
 
 And the four items on the right are exactly the ones the agent would
@@ -136,6 +136,46 @@ ratified decision (mass earned from two voices), a causal chain (the
 *why*), a dispute (the rejected bandaid, which Bella's edit guard
 will block if the agent tries it again), and a self-observation about
 its own reasoning pattern.
+
+### The ontology
+
+Every concept in Bella is classified along two orthogonal axes. The
+axes aren't decorative — they drive retrieval, decay, and dispute
+handling differently. A normative decision about testing style doesn't
+decay the way an ephemeral observation about yesterday's build does.
+
+**Class** — where does it come from and how is it used?
+
+| class | shape | meaning |
+|---|---|---|
+| **invariant** | hexagon | time-invariant principles and facts — they don't decay |
+| **decision** | diamond | a commitment that constrains future action — revisable |
+| **observation** | ellipse | a single empirical record — a snapshot |
+| **ephemeral** | rounded square | pinned for short-term use, has an open→consumed/retracted/stale lifecycle |
+
+**Nature** — what kind of claim is this?
+
+| nature | color | meaning |
+|---|---|---|
+| **metaphysical** | amber | what the system IS — self-model, architectural facts |
+| **normative** | blue | what we commit to — rules, preferences, policies |
+| **factual** | green | measurable, checkable facts about the world |
+
+The 12 cells are a full typology — `invariant × metaphysical` is the
+deepest bedrock ("the graph is append-only"), `ephemeral × factual` is
+throwaway ("yesterday's CI was red"). Mass accumulates on every cell
+the same way (Jaynes log-odds from each ratifying voice), but the
+retrieval guard, the decay curve, and the dispute resolution read
+each cell differently.
+
+You can see the full ontology rendered live on your own graph:
+
+```bash
+python -m bellamem.proto viz              # .graph/v02.html (interactive)
+```
+
+Shape encodes class, color encodes nature, node size encodes
+mass, turn-hubs make the hypergraph structure visible as rosettes.
 
 ---
 
@@ -226,7 +266,7 @@ read-only.
 
 ---
 
-## Use with <img src="docs/brand/claude-mark.svg" alt="Claude" width="22" align="center"/> Claude Code
+## Use with <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/claude-mark.svg" alt="Claude" width="22" align="center"/> Claude Code
 
 The flow that lets you keep working past the context window without
 losing the thread is packaged into four slash commands.
@@ -333,16 +373,24 @@ structured retrieval preserves decisions. The two are complementary:
 
 ## See the graph
 
-A real Bella belief hypergraph — roughly 1,800 beliefs from a month
-of Claude Code sessions on Bella itself, across eight topical fields.
-Typed edges (`→` support, `⊥` rejected approach, `⇒` cause) and
-mass-weighted nodes are the structure that flat context can't preserve.
+Three live, clickable renders of Bella's own v0.2 concept graph —
+real data, filtered to `min_mass ≥ 0.7` so you see the ratified
+structural spine instead of noise:
 
-<a href="https://github.com/immartian/bellamem/raw/master/docs/bella-viz3d.webm">
-  <img src="docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph visualization — click to play" width="720"/>
+- **[3D concept map](https://immartian.github.io/bellamem/viz/v02-3d.html)** — Three.js with UMAP × mass. Orbit, zoom, click any mesh.
+- **[2D force-directed (D3)](https://immartian.github.io/bellamem/viz/v02-d3.html)** — d3-force, draggable nodes.
+- **[2D force-directed (Cytoscape)](https://immartian.github.io/bellamem/viz/v02-cytoscape.html)** — cytoscape + fcose.
+
+Or visit the project page: **<https://immartian.github.io/bellamem/>**
+
+<a href="https://immartian.github.io/bellamem/viz/v02-3d.html">
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/brand/bella-viz3d-poster.png" alt="3D belief hypergraph visualization — click to open the live version" width="720"/>
 </a>
 
-*Click the image to play the .webm.*
+*Shape encodes class (hexagon/diamond/ellipse/cube), color encodes
+nature (amber/blue/green), node size encodes mass, and typed edges
+(`→` support, `⇒` cause, `…` elaborate, `⊥` dispute) are the
+structure that flat context can't preserve.*
 
 ---
 
@@ -396,7 +444,7 @@ work — at a fixed `expand` budget of 1500 tokens.
 Visually:
 
 <p align="center">
-  <img src="docs/compression-curve-production.svg" alt="Bella compression ratio across all scenarios. A scatter plot of 19 sessions — 4 synthetic and 15 real Claude Code sessions sampled across 15 different projects — on log-x raw conversation tokens (50 to 200,000) against log-y compression ratio (0.5 to 100). A dashed horizontal line at ratio=1 marks the break-even point. The data climbs monotonically from below 1 at toy scale through 10x at medium scale to 90x at production scale. Synthetic scenarios appear as small gray dots in the lower-left; real Claude Code sessions appear as large colored dots climbing toward the upper-right." width="720"/>
+  <img src="https://raw.githubusercontent.com/immartian/bellamem/master/docs/compression-curve-production.svg" alt="Bella compression ratio across all scenarios. A scatter plot of 19 sessions — 4 synthetic and 15 real Claude Code sessions sampled across 15 different projects — on log-x raw conversation tokens (50 to 200,000) against log-y compression ratio (0.5 to 100). A dashed horizontal line at ratio=1 marks the break-even point. The data climbs monotonically from below 1 at toy scale through 10x at medium scale to 90x at production scale. Synthetic scenarios appear as small gray dots in the lower-left; real Claude Code sessions appear as large colored dots climbing toward the upper-right." width="720"/>
 </p>
 
 The pattern is unambiguous: **`expand` honors whatever budget the

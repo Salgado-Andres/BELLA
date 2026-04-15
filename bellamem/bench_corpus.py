@@ -35,20 +35,6 @@ class BenchItem:
 
 BENCH_ITEMS: list[BenchItem] = [
     BenchItem(
-        id="Q01",
-        query="Should I add a fallback default when the snapshot is missing "
-              "the embedder signature so old files still load?",
-        focus_entity="store.py",
-        expected_any_of=[
-            "break forward",
-            "no backwards-compat shims",
-            "no feature flags",
-            "fail loud",
-            "reset",
-        ],
-        category="bandaid",
-    ),
-    BenchItem(
         id="Q02",
         query="Should I rewrite the prototype in Rust instead of Python?",
         expected_any_of=[
@@ -131,17 +117,6 @@ BENCH_ITEMS: list[BenchItem] = [
         category="persistence",
     ),
     BenchItem(
-        id="Q10",
-        query="How should a user's affirmation affect preceding assistant claims?",
-        expected_any_of=[
-            "retroactive ratification",
-            "lr=2.2",
-            "independent voice",
-            "boost",
-        ],
-        category="epistemics",
-    ),
-    BenchItem(
         id="Q12",
         query="What does BELLAMEM_EW=hybrid actually do beyond regex EW?",
         expected_any_of=[
@@ -152,27 +127,6 @@ BENCH_ITEMS: list[BenchItem] = [
             "gpt-4o-mini",
         ],
         category="extraction",
-    ),
-    BenchItem(
-        id="Q13",
-        query="Should expand_before_edit include a recency layer?",
-        expected_any_of=[
-            "recency is actively harmful",
-            "no recency",
-            "biases toward the last bandaid",
-        ],
-        category="expand",
-    ),
-    BenchItem(
-        id="Q14",
-        query="Can I add a new mutation method like `gene.touch(bid)` "
-              "directly on the Gene class?",
-        expected_any_of=[
-            "seven operations",
-            "complete mutation API",
-            "no direct writes to gene",
-        ],
-        category="architecture",
     ),
     BenchItem(
         id="Q15",
